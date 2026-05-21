@@ -14,6 +14,12 @@ import jadx.core.dex.nodes.RootNode;
 
 public class B64FieldInitPass implements JadxDecompilePass {
 
+	private final int maxCommentLength;
+
+	public B64FieldInitPass(int maxCommentLength) {
+		this.maxCommentLength = maxCommentLength;
+	}
+
 	@Override
 	public JadxPassInfo getInfo() {
 		return new OrderedJadxPassInfo(
@@ -37,7 +43,7 @@ public class B64FieldInitPass implements JadxDecompilePass {
 			if (!(initInsn instanceof ConstStringNode)) {
 				continue;
 			}
-			String decoded = B64Detector.detect(((ConstStringNode) initInsn).getString());
+			String decoded = B64Detector.detect(((ConstStringNode) initInsn).getString(), maxCommentLength);
 			if (decoded != null) {
 				field.addCodeComment("b64: " + decoded);
 			}

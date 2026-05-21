@@ -14,13 +14,15 @@ public final class B64Detector {
 	private static final Pattern BASE64_URL_SAFE = Pattern.compile("^[A-Za-z0-9_-]+=*$");
 	private static final int MIN_LENGTH = 8;
 	private static final double MIN_PRINTABLE_RATIO = 0.75;
-	static final int MAX_COMMENT_LENGTH = 100;
 
 	private B64Detector() {
 	}
 
-	/** Returns the decoded+truncated string if {@code str} looks like Base64, otherwise null. */
-	public static String detect(String str) {
+	/**
+	 * Returns the decoded string if {@code str} looks like Base64, otherwise null.
+	 * The result is truncated to {@code maxLength} chars (0 = unlimited).
+	 */
+	public static String detect(String str, int maxLength) {
 		if (str.length() < MIN_LENGTH) {
 			return null;
 		}
@@ -31,7 +33,7 @@ public final class B64Detector {
 		if (decoded == null) {
 			return null;
 		}
-		return truncate(decoded);
+		return truncate(decoded, maxLength);
 	}
 
 	private static String tryDecode(String str) {
@@ -69,10 +71,10 @@ public final class B64Detector {
 		return (double) printableCount / str.length() >= MIN_PRINTABLE_RATIO;
 	}
 
-	static String truncate(String str) {
+	static String truncate(String str, int maxLength) {
 		String safe = str.replace("\n", "\\n").replace("\r", "\\r");
-		if (safe.length() > MAX_COMMENT_LENGTH) {
-			return safe.substring(0, MAX_COMMENT_LENGTH) + "...";
+		if (maxLength > 0 && safe.length() > maxLength) {
+			return safe.substring(0, maxLength) + "...";
 		}
 		return safe;
 	}

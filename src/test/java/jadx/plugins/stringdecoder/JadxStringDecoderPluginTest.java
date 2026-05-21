@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -84,9 +85,32 @@ class JadxStringDecoderPluginTest {
 		assertThat(code).contains("b64: hello");
 	}
 
+	@Test
+	public void maxCommentLengthOptionTest() throws Exception {
+		// maxCommentLength=10 should truncate the 650-char decoded string to 10 chars + "..."
+		String code = decompileSmali("b64/long_b64.smali", Map.of("b64-deobfuscate.maxCommentLength", "10"));
+		System.out.println(code);
+		assertThat(code).contains("b64: " + "A".repeat(10) + "...");
+		assertThat(code).doesNotContain("A".repeat(11));
+	}
+
+	@Test
+	public void unlimitedCommentLengthOptionTest() throws Exception {
+		// maxCommentLength=0 should produce a comment with all 650 decoded chars, no truncation
+		String code = decompileSmali("b64/long_b64.smali", Map.of("b64-deobfuscate.maxCommentLength", "0"));
+		System.out.println(code);
+		assertThat(code).contains("b64: " + "A".repeat(650));
+		assertThat(code).doesNotContain("...");
+	}
+
 	private String decompileSmali(String fileName) throws Exception {
+		return decompileSmali(fileName, Map.of());
+	}
+
+	private String decompileSmali(String fileName, Map<String, String> pluginOptions) throws Exception {
 		JadxArgs args = new JadxArgs();
 		args.getInputFiles().add(getSampleFile(fileName));
+		args.setPluginOptions(pluginOptions);
 		try (JadxDecompiler jadx = new JadxDecompiler(args)) {
 			jadx.load();
 			JavaClass cls = jadx.getClasses().get(0);
