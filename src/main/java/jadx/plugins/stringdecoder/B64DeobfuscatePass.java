@@ -24,10 +24,10 @@ import jadx.core.dex.nodes.RootNode;
 
 public class B64DeobfuscatePass implements JadxDecompilePass {
 
-	private final int maxCommentLength;
+	private final B64DeobfuscateOptions options;
 
-	public B64DeobfuscatePass(int maxCommentLength) {
-		this.maxCommentLength = maxCommentLength;
+	public B64DeobfuscatePass(B64DeobfuscateOptions options) {
+		this.options = options;
 	}
 
 	@Override
@@ -65,7 +65,7 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 					continue;
 				}
 				ConstStringNode csn = (ConstStringNode) insn;
-				String decoded = B64Detector.detect(csn.getString(), maxCommentLength);
+				String decoded = B64Detector.detect(csn.getString(), options);
 				if (decoded == null) {
 					continue;
 				}

@@ -17,10 +17,10 @@ import jadx.core.dex.nodes.RootNode;
 
 public class B64FieldInitPass implements JadxDecompilePass {
 
-	private final int maxCommentLength;
+	private final B64DeobfuscateOptions options;
 
-	public B64FieldInitPass(int maxCommentLength) {
-		this.maxCommentLength = maxCommentLength;
+	public B64FieldInitPass(B64DeobfuscateOptions options) {
+		this.options = options;
 	}
 
 	@Override
@@ -65,7 +65,7 @@ public class B64FieldInitPass implements JadxDecompilePass {
 	}
 
 	private void annotateField(FieldNode field, String str) {
-		String decoded = B64Detector.detect(str, maxCommentLength);
+		String decoded = B64Detector.detect(str, options);
 		if (decoded != null) {
 			field.addCodeComment("b64: " + decoded);
 		}
