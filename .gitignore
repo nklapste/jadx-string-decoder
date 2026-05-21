@@ -36,4 +36,5 @@ idea/
 
 # local
 .claude/
+CLAUDE.local.md
 dev/
