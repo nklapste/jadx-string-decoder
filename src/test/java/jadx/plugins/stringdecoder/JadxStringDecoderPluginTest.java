@@ -78,6 +78,21 @@ class JadxStringDecoderPluginTest {
 	}
 
 	@Test
+	public void constantValueFieldB64Test() throws Exception {
+		// B64 string as a literal CONSTANT_VALUE on a static final field (no <clinit>).
+		// The comment must appear on the line above the field declaration, not at usage sites in method bodies.
+		String code = decompileSmali("b64/constant_value_field_b64.smali");
+		System.out.println(code);
+		assertThat(code).contains("b64: Hello, World!");
+		int commentPos = code.indexOf("// b64:");
+		int fieldPos = code.indexOf("PREFIX =");
+		// Comment is before the field declaration
+		assertThat(commentPos).isLessThan(fieldPos);
+		// Comment does not appear again after the field declaration (i.e. not at usage sites)
+		assertThat(code.indexOf("// b64:", fieldPos + 1)).isEqualTo(-1);
+	}
+
+	@Test
 	public void staticFieldB64Test() throws Exception {
 		// Base64 string assigned to a static field via <clinit>; comment should appear on the field declaration
 		String code = decompileSmali("b64/static_field_b64.smali");

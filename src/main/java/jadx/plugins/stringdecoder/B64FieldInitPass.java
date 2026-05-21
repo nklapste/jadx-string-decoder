@@ -1,5 +1,8 @@
 package jadx.plugins.stringdecoder;
 
+import jadx.api.plugins.input.data.annotations.EncodedType;
+import jadx.api.plugins.input.data.annotations.EncodedValue;
+import jadx.api.plugins.input.data.attributes.JadxAttrType;
 import jadx.api.plugins.pass.JadxPassInfo;
 import jadx.api.plugins.pass.impl.OrderedJadxPassInfo;
 import jadx.api.plugins.pass.types.JadxDecompilePass;
@@ -35,20 +38,37 @@ public class B64FieldInitPass implements JadxDecompilePass {
 	@Override
 	public boolean visit(ClassNode cls) {
 		for (FieldNode field : cls.getFields()) {
-			FieldInitInsnAttr initAttr = field.get(AType.FIELD_INIT_INSN);
-			if (initAttr == null) {
-				continue;
-			}
-			InsnNode initInsn = initAttr.getInsn();
-			if (!(initInsn instanceof ConstStringNode)) {
-				continue;
-			}
-			String decoded = B64Detector.detect(((ConstStringNode) initInsn).getString(), maxCommentLength);
-			if (decoded != null) {
-				field.addCodeComment("b64: " + decoded);
-			}
+			processField(field);
 		}
 		return false;
+	}
+
+	private void processField(FieldNode field) {
+		// Case 1: field initialised via <clinit> / constructor and extracted by ExtractFieldInit
+		FieldInitInsnAttr initAttr = field.get(AType.FIELD_INIT_INSN);
+		if (initAttr != null) {
+			InsnNode initInsn = initAttr.getInsn();
+			if (initInsn instanceof ConstStringNode) {
+				annotateField(field, ((ConstStringNode) initInsn).getString());
+			}
+			return;
+		}
+
+		// Case 2: static final field with a literal value encoded as CONSTANT_VALUE (no <clinit>)
+		EncodedValue constVal = field.get(JadxAttrType.CONSTANT_VALUE);
+		if (constVal != null && constVal.getType() == EncodedType.ENCODED_STRING) {
+			Object val = constVal.getValue();
+			if (val instanceof String) {
+				annotateField(field, (String) val);
+			}
+		}
+	}
+
+	private void annotateField(FieldNode field, String str) {
+		String decoded = B64Detector.detect(str, maxCommentLength);
+		if (decoded != null) {
+			field.addCodeComment("b64: " + decoded);
+		}
 	}
 
 	@Override
