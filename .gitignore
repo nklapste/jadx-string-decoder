@@ -32,3 +32,8 @@ idea/
 *.log
 *.cfg
 *.orig
+
+
+# local
+.claude/
+dev/

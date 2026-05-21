@@ -6,16 +6,16 @@ import jadx.api.plugins.JadxPluginInfo;
 import jadx.api.plugins.JadxPluginInfoBuilder;
 
 public class JadxExamplePlugin implements JadxPlugin {
-	public static final String PLUGIN_ID = "example-plugin";
+	public static final String PLUGIN_ID = "b64-deobfuscate";
 
-	private final ExampleOptions options = new ExampleOptions();
+	private final B64DeobfuscateOptions options = new B64DeobfuscateOptions();
 
 	@Override
 	public JadxPluginInfo getPluginInfo() {
 		return JadxPluginInfoBuilder.pluginId(PLUGIN_ID)
-				.name("Jadx example plugin")
-				.description("Add jadx watermark comment to every class")
-				.homepage("https://github.com/jadx-decompiler/jadx-example-plugin")
+				.name("String Decoder")
+				.description("Detect likely Base64-encoded string constants and add decoded value as a comment")
+				.homepage("https://github.com/nklapste/jadx-string-decoder")
 				.requiredJadxVersion("1.5.1, r2333")
 				.build();
 	}
@@ -24,7 +24,7 @@ public class JadxExamplePlugin implements JadxPlugin {
 	public void init(JadxPluginContext context) {
 		context.registerOptions(options);
 		if (options.isEnable()) {
-			context.addPass(new AddCommentPass());
+			context.addPass(new B64DeobfuscatePass());
 		}
 	}
 }
