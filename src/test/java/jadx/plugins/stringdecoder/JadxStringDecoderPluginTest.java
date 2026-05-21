@@ -220,6 +220,14 @@ class JadxStringDecoderPluginTest {
 		assertThat(code).contains("b64: Hello, World!");
 	}
 
+	@Test
+	public void byteArrayStringTest() throws Exception {
+		// byte[] field whose bytes are ASCII "Hello, World!" — plugin should add a bytes: comment
+		String code = decompileSmali("bytes/byte_array_string.smali");
+		System.out.println(code);
+		assertThat(code).contains("bytes: \"Hello, World!\"");
+	}
+
 	private String decompileSmali(String fileName) throws Exception {
 		return decompileSmali(fileName, Map.of());
 	}
