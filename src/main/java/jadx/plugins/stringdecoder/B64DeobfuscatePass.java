@@ -1,4 +1,4 @@
-package jadx.plugins.example;
+package jadx.plugins.stringdecoder;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;

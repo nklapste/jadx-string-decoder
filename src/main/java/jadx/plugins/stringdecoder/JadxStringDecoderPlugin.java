@@ -1,11 +1,11 @@
-package jadx.plugins.example;
+package jadx.plugins.stringdecoder;
 
 import jadx.api.plugins.JadxPlugin;
 import jadx.api.plugins.JadxPluginContext;
 import jadx.api.plugins.JadxPluginInfo;
 import jadx.api.plugins.JadxPluginInfoBuilder;
 
-public class JadxExamplePlugin implements JadxPlugin {
+public class JadxStringDecoderPlugin implements JadxPlugin {
 	public static final String PLUGIN_ID = "b64-deobfuscate";
 
 	private final B64DeobfuscateOptions options = new B64DeobfuscateOptions();
