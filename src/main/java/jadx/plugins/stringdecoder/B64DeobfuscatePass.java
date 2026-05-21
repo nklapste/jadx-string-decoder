@@ -15,12 +15,14 @@ import jadx.api.plugins.pass.types.JadxDecompilePass;
 import jadx.core.codegen.utils.CodeComment;
 import jadx.core.dex.attributes.AType;
 import jadx.core.dex.instructions.ConstStringNode;
+import jadx.core.dex.instructions.args.RegisterArg;
 import jadx.core.dex.nodes.BlockNode;
 import jadx.core.dex.nodes.ClassNode;
 import jadx.core.dex.nodes.FieldNode;
 import jadx.core.dex.nodes.InsnNode;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.nodes.RootNode;
+import jadx.core.dex.instructions.args.SSAVar;
 
 public class B64DeobfuscatePass implements JadxDecompilePass {
 
@@ -65,7 +67,14 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 					continue;
 				}
 				ConstStringNode csn = (ConstStringNode) insn;
-				String decoded = B64Detector.detect(csn.getString(), options);
+				String str = csn.getString();
+
+				// If the string is an arg to an explicit Base64.decode call, decode unconditionally.
+				// The call itself is strong evidence of intent — skip false-positive heuristics.
+				boolean forced = isUsedAsBase64DecodeArg(csn);
+				String decoded = forced
+						? B64Detector.decodeForced(str, options.getMaxCommentLength())
+						: B64Detector.detect(str, options);
 				if (decoded == null) {
 					continue;
 				}
@@ -73,11 +82,33 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 					fieldConstants = collectConstantValueFieldStrings(mth.getParentClass());
 				}
 				// Skip strings that are static final CONSTANT_VALUE fields — B64FieldInitPass handles those
-				if (!fieldConstants.contains(csn.getString())) {
+				if (!fieldConstants.contains(str)) {
 					csn.addAttr(AType.CODE_COMMENTS, new CodeComment("b64: " + decoded, CommentStyle.LINE));
 				}
 			}
 		}
+	}
+
+	/**
+	 * Returns true if any use of {@code csn}'s result register is a direct argument
+	 * to a Base64.decode-like method call.
+	 */
+	private static boolean isUsedAsBase64DecodeArg(ConstStringNode csn) {
+		RegisterArg result = csn.getResult();
+		if (result == null) {
+			return false;
+		}
+		SSAVar ssaVar = result.getSVar();
+		if (ssaVar == null) {
+			return false;
+		}
+		for (RegisterArg use : ssaVar.getUseList()) {
+			InsnNode parent = use.getParentInsn();
+			if (B64FieldInitPass.isBase64DecodeCall(parent)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** Collects literal string values of all CONSTANT_VALUE fields in the class. */

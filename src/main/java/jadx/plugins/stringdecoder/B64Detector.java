@@ -100,6 +100,27 @@ public final class B64Detector {
 		return (double) alnumCount / str.length() >= minRatio;
 	}
 
+	/**
+	 * Decodes {@code str} as Base64 without applying any false-positive heuristics.
+	 * Use when the string is explicitly passed to a Base64.decode call — the call itself
+	 * is strong evidence of intent. Returns null only if the string is not valid Base64.
+	 * Invalid UTF-8 bytes are replaced rather than causing a rejection.
+	 */
+	public static String decodeForced(String str, int maxCommentLength) {
+		for (Base64.Decoder decoder : new Base64.Decoder[]{Base64.getDecoder(), Base64.getUrlDecoder()}) {
+			try {
+				byte[] bytes = decoder.decode(str);
+				CharsetDecoder utf8 = StandardCharsets.UTF_8.newDecoder()
+						.onMalformedInput(CodingErrorAction.REPLACE)
+						.onUnmappableCharacter(CodingErrorAction.REPLACE);
+				String decoded = utf8.decode(ByteBuffer.wrap(bytes)).toString();
+				return truncate(decoded, maxCommentLength);
+			} catch (Exception ignored) {
+			}
+		}
+		return null;
+	}
+
 	static String truncate(String str, int maxLength) {
 		String safe = str.replace("\n", "\\n").replace("\r", "\\r");
 		if (maxLength > 0 && safe.length() > maxLength) {

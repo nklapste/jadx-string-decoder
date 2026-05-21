@@ -175,6 +175,15 @@ class JadxStringDecoderPluginTest {
 	}
 
 	@Test
+	public void decodedFieldB64Test() throws Exception {
+		// new String(Base64.decode("...", 0)) field init — arg tree walk should find the encoded string
+		// and forced decode (bypassing heuristics) because it's an explicit Base64.decode call
+		String code = decompileSmali("b64/decoded_field_b64.smali");
+		System.out.println(code);
+		assertThat(code).contains("b64: room://cloud.tencent.com/rtc");
+	}
+
+	@Test
 	public void skipIdentifiersFiltersIdentifierLikeTest() throws Exception {
 		// "fillItem" looks like a Java identifier; with skipIdentifiers=true it must not be flagged
 		// (printable threshold lowered so only the identifier check is responsible for filtering)
