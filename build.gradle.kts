@@ -47,6 +47,9 @@ version = System.getenv("VERSION") ?: "dev"
 tasks {
     withType(Test::class) {
         useJUnitPlatform()
+        testLogging {
+            showStandardStreams = true
+        }
     }
     val shadowJar = withType(ShadowJar::class) {
         archiveClassifier.set("") // remove '-all' suffix
