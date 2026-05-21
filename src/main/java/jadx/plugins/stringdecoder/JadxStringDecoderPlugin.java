@@ -1,10 +1,13 @@
 package jadx.plugins.stringdecoder;
 
+import java.awt.BorderLayout;
+import java.awt.Component;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import javax.swing.BoxLayout;
 import javax.swing.JComponent;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 
 import jadx.api.plugins.JadxPlugin;
@@ -46,6 +49,32 @@ public class JadxStringDecoderPlugin implements JadxPlugin {
 		}
 	}
 
+	private static JComponent buildSection(JadxGuiContext guiCtx, String title,
+			List<OptionDescription> opts, String note) {
+		JComponent panel = guiCtx.settings().buildSettingsGroupForOptions(title, opts).buildComponent();
+		// panel is a BorderLayout JPanel with a TitledBorder; the option grid sits at PAGE_START.
+		// Pull the grid out, wrap it with the note label, and re-insert so the note is inside the border.
+		if (panel.getLayout() instanceof BorderLayout) {
+			BorderLayout bl = (BorderLayout) panel.getLayout();
+			Component grid = bl.getLayoutComponent(BorderLayout.PAGE_START);
+			if (grid != null) {
+				panel.remove(grid);
+				JLabel noteLabel = new JLabel(note);
+				noteLabel.setEnabled(false);
+				noteLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+				if (grid instanceof JComponent) {
+					((JComponent) grid).setAlignmentX(Component.LEFT_ALIGNMENT);
+				}
+				JPanel inner = new JPanel();
+				inner.setLayout(new BoxLayout(inner, BoxLayout.PAGE_AXIS));
+				inner.add(noteLabel);
+				inner.add(grid);
+				panel.add(inner, BorderLayout.PAGE_START);
+			}
+		}
+		return panel;
+	}
+
 	private void setupCustomSettingsGroup(JadxGuiContext guiCtx) {
 		guiCtx.settings().setCustomSettingsGroup(new ISettingsGroup() {
 			private JPanel panel;
@@ -66,17 +95,12 @@ public class JadxStringDecoderPlugin implements JadxPlugin {
 							.filter(o -> o.name().contains("ByteArray"))
 							.collect(Collectors.toList());
 
-					JComponent b64Panel = guiCtx.settings()
-							.buildSettingsGroupForOptions("B64 String Decoder", b64Opts)
-							.buildComponent();
-					JComponent byteArrayPanel = guiCtx.settings()
-							.buildSettingsGroupForOptions("Byte Array String Decoder", byteArrayOpts)
-							.buildComponent();
-
 					panel = new JPanel();
 					panel.setLayout(new BoxLayout(panel, BoxLayout.PAGE_AXIS));
-					panel.add(b64Panel);
-					panel.add(byteArrayPanel);
+					panel.add(JadxStringDecoderPlugin.buildSection(guiCtx, "B64 String Decoder", b64Opts,
+							"* Adds // b64: <DECODED_VALUE> comments to Base64-encoded string/field initializers."));
+					panel.add(JadxStringDecoderPlugin.buildSection(guiCtx, "Byte Array String Decoder", byteArrayOpts,
+							"* Adds // bytes: <DECODED_VALUE> comments to byte[] fields that decode to printable strings."));
 				}
 				return panel;
 			}
