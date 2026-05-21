@@ -103,7 +103,7 @@ class JadxStringDecoderPluginTest {
 	@Test
 	public void maxCommentLengthOptionTest() throws Exception {
 		// maxCommentLength=10 should truncate the 650-char decoded string to 10 chars + "..."
-		String code = decompileSmali("b64/long_b64.smali", Map.of("b64-deobfuscate.maxCommentLength", "10"));
+		String code = decompileSmali("b64/long_b64.smali", Map.of(opt("maxCommentLength"), "10"));
 		System.out.println(code);
 		assertThat(code).contains("b64: " + "A".repeat(10) + "...");
 		assertThat(code).doesNotContain("A".repeat(11));
@@ -112,7 +112,7 @@ class JadxStringDecoderPluginTest {
 	@Test
 	public void unlimitedCommentLengthOptionTest() throws Exception {
 		// maxCommentLength=0 should produce a comment with all 650 decoded chars, no truncation
-		String code = decompileSmali("b64/long_b64.smali", Map.of("b64-deobfuscate.maxCommentLength", "0"));
+		String code = decompileSmali("b64/long_b64.smali", Map.of(opt("maxCommentLength"), "0"));
 		System.out.println(code);
 		assertThat(code).contains("b64: " + "A".repeat(650));
 		assertThat(code).doesNotContain("...");
@@ -131,7 +131,7 @@ class JadxStringDecoderPluginTest {
 	public void lowPrintableThresholdOptionTest() throws Exception {
 		// Lowering minPrintablePercent to 75 (old default) causes "fillItem" to be flagged again
 		String code = decompileSmali("b64/identifier_like_b64.smali",
-				Map.of("b64-deobfuscate.minPrintablePercent", "75"));
+				Map.of(opt("minPrintablePercent"), "75"));
 		System.out.println(code);
 		assertThat(code).contains("b64:");
 	}
@@ -140,7 +140,7 @@ class JadxStringDecoderPluginTest {
 	public void requirePaddingFiltersNoPaddingTest() throws Exception {
 		// "fillItem" has no '=' padding; with requirePadding=true it must not be flagged
 		String code = decompileSmali("b64/identifier_like_b64.smali",
-				Map.of("b64-deobfuscate.requirePadding", "yes", "b64-deobfuscate.minPrintablePercent", "75"));
+				Map.of(opt("requirePadding"), "yes", opt("minPrintablePercent"), "75"));
 		System.out.println(code);
 		assertThat(code).doesNotContain("b64:");
 	}
@@ -149,7 +149,7 @@ class JadxStringDecoderPluginTest {
 	public void requirePaddingAllowsPaddedStringTest() throws Exception {
 		// "aGVsbG8=" ends with '='; it must still be flagged when requirePadding=true
 		String code = decompileSmali("b64/b64_decodable.smali",
-				Map.of("b64-deobfuscate.requirePadding", "yes"));
+				Map.of(opt("requirePadding"), "yes"));
 		System.out.println(code);
 		assertThat(code).contains("b64: hello");
 	}
@@ -158,7 +158,7 @@ class JadxStringDecoderPluginTest {
 	public void minInputLengthOptionTest() throws Exception {
 		// Raising minInputLength to 24 should suppress the 8-char "aGVsbG8=" string
 		String code = decompileSmali("b64/b64_decodable.smali",
-				Map.of("b64-deobfuscate.minInputLength", "24"));
+				Map.of(opt("minInputLength"), "24"));
 		System.out.println(code);
 		assertThat(code).doesNotContain("b64:");
 	}
@@ -168,8 +168,8 @@ class JadxStringDecoderPluginTest {
 		// "fillItem" decodes to ~40% alphanumeric; setting minAlphanumericPercent=50 must suppress it
 		// (set printable threshold low enough to isolate the alnum check)
 		String code = decompileSmali("b64/identifier_like_b64.smali",
-				Map.of("b64-deobfuscate.minPrintablePercent", "75",
-						"b64-deobfuscate.minAlphanumericPercent", "50"));
+				Map.of(opt("minPrintablePercent"), "75",
+						opt("minAlphanumericPercent"), "50"));
 		System.out.println(code);
 		assertThat(code).doesNotContain("b64:");
 	}
@@ -188,7 +188,7 @@ class JadxStringDecoderPluginTest {
 		// "fillItem" looks like a Java identifier; with skipIdentifiers=true it must not be flagged
 		// (printable threshold lowered so only the identifier check is responsible for filtering)
 		String code = decompileSmali("b64/identifier_like_b64.smali",
-				Map.of("b64-deobfuscate.skipIdentifiers", "yes", "b64-deobfuscate.minPrintablePercent", "75"));
+				Map.of(opt("skipIdentifiers"), "yes", opt("minPrintablePercent"), "75"));
 		System.out.println(code);
 		assertThat(code).doesNotContain("b64:");
 	}
@@ -197,7 +197,7 @@ class JadxStringDecoderPluginTest {
 	public void skipIdentifiersAllowsPaddedStringTest() throws Exception {
 		// "aGVsbG8=" contains '=' so it is NOT identifier-like; skipIdentifiers=true must not suppress it
 		String code = decompileSmali("b64/b64_decodable.smali",
-				Map.of("b64-deobfuscate.skipIdentifiers", "yes"));
+				Map.of(opt("skipIdentifiers"), "yes"));
 		System.out.println(code);
 		assertThat(code).contains("b64: hello");
 	}
@@ -206,7 +206,7 @@ class JadxStringDecoderPluginTest {
 	public void minDecodedLengthFiltersShortDecodeTest() throws Exception {
 		// "aGVsbG8=" decodes to "hello" (5 chars); minDecodedLength=10 must suppress it
 		String code = decompileSmali("b64/b64_decodable.smali",
-				Map.of("b64-deobfuscate.minDecodedLength", "10"));
+				Map.of(opt("minDecodedLength"), "10"));
 		System.out.println(code);
 		assertThat(code).doesNotContain("b64:");
 	}
@@ -215,7 +215,7 @@ class JadxStringDecoderPluginTest {
 	public void minDecodedLengthAllowsLongDecodeTest() throws Exception {
 		// "SGVsbG8sIFdvcmxkIQ==" decodes to "Hello, World!" (13 chars); minDecodedLength=10 must allow it
 		String code = decompileSmali("b64/hello.smali",
-				Map.of("b64-deobfuscate.minDecodedLength", "10"));
+				Map.of(opt("minDecodedLength"), "10"));
 		System.out.println(code);
 		assertThat(code).contains("b64: Hello, World!");
 	}
@@ -230,6 +230,10 @@ class JadxStringDecoderPluginTest {
 
 	private String decompileSmali(String fileName) throws Exception {
 		return decompileSmali(fileName, Map.of());
+	}
+
+	private static String opt(String key) {
+		return JadxStringDecoderPlugin.PLUGIN_ID + "." + key;
 	}
 
 	private String decompileSmali(String fileName, Map<String, String> pluginOptions) throws Exception {

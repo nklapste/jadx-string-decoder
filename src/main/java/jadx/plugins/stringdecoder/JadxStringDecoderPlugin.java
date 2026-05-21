@@ -6,7 +6,7 @@ import jadx.api.plugins.JadxPluginInfo;
 import jadx.api.plugins.JadxPluginInfoBuilder;
 
 public class JadxStringDecoderPlugin implements JadxPlugin {
-	public static final String PLUGIN_ID = "b64-deobfuscate";
+	public static final String PLUGIN_ID = "jadx-string-decoder";
 
 	private final B64DeobfuscateOptions options = new B64DeobfuscateOptions();
 
