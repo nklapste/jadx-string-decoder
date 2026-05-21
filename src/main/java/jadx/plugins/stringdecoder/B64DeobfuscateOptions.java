@@ -5,6 +5,7 @@ import jadx.api.plugins.options.impl.BasePluginOptionsBuilder;
 public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 
 	private boolean enable;
+	private boolean enableByteArrayStringPass;
 	private int minInputLength;
 	private int minDecodedLength;
 	private int maxCommentLength;
@@ -19,6 +20,10 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 				.description("Enable Base64 string detection and decoding")
 				.defaultValue(true)
 				.setter(v -> enable = v);
+		boolOption(JadxStringDecoderPlugin.PLUGIN_ID + ".enableByteArrayStringPass")
+				.description("Enable byte[] field string detection pass")
+				.defaultValue(true)
+				.setter(v -> enableByteArrayStringPass = v);
 		intOption(JadxStringDecoderPlugin.PLUGIN_ID + ".minInputLength")
 				.description("Minimum length of an encoded string to be considered for decoding")
 				.defaultValue(8)
@@ -51,6 +56,10 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 
 	public boolean isEnable() {
 		return enable;
+	}
+
+	public boolean isEnableByteArrayStringPass() {
+		return enableByteArrayStringPass;
 	}
 
 	public int getMinInputLength() {

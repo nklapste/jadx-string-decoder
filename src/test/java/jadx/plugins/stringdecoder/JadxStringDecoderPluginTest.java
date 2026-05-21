@@ -228,6 +228,15 @@ class JadxStringDecoderPluginTest {
 		assertThat(code).contains("bytes: \"Hello, World!\"");
 	}
 
+	@Test
+	public void byteArrayStringPassDisabledTest() throws Exception {
+		// with enableByteArrayStringPass=false the bytes: comment must not appear
+		String code = decompileSmali("bytes/byte_array_string.smali",
+				Map.of(opt("enableByteArrayStringPass"), "false"));
+		System.out.println(code);
+		assertThat(code).doesNotContain("bytes:");
+	}
+
 	private String decompileSmali(String fileName) throws Exception {
 		return decompileSmali(fileName, Map.of());
 	}
