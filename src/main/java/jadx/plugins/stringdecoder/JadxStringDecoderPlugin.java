@@ -25,6 +25,7 @@ public class JadxStringDecoderPlugin implements JadxPlugin {
 		context.registerOptions(options);
 		if (options.isEnable()) {
 			context.addPass(new B64DeobfuscatePass());
+			context.addPass(new B64FieldInitPass());
 		}
 	}
 }

@@ -76,6 +76,14 @@ class JadxStringDecoderPluginTest {
 		assertThat(code).contains("b64: Line 1\\nLine 2\\nLine 3");
 	}
 
+	@Test
+	public void staticFieldB64Test() throws Exception {
+		// Base64 string assigned to a static field via <clinit>; comment should appear on the field declaration
+		String code = decompileSmali("b64/static_field_b64.smali");
+		System.out.println(code);
+		assertThat(code).contains("b64: hello");
+	}
+
 	private String decompileSmali(String fileName) throws Exception {
 		JadxArgs args = new JadxArgs();
 		args.getInputFiles().add(getSampleFile(fileName));
