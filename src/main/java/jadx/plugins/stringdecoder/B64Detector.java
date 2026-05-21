@@ -10,8 +10,9 @@ import java.util.regex.Pattern;
 
 public final class B64Detector {
 
-	private static final Pattern BASE64_STANDARD = Pattern.compile("^[A-Za-z0-9+/]+=*$");
-	private static final Pattern BASE64_URL_SAFE = Pattern.compile("^[A-Za-z0-9_-]+=*$");
+	// Allow embedded \n/\r (PEM/MIME line-wrapped Base64); = padding and trailing newline are optional
+	private static final Pattern BASE64_STANDARD = Pattern.compile("^[A-Za-z0-9+/\\n\\r]*=*[\\n\\r]*$");
+	private static final Pattern BASE64_URL_SAFE = Pattern.compile("^[A-Za-z0-9_\\-\\n\\r]*=*[\\n\\r]*$");
 	private static final Pattern IDENTIFIER_LIKE = Pattern.compile("^[A-Za-z][A-Za-z0-9]*$");
 
 	private B64Detector() {
@@ -46,7 +47,15 @@ public final class B64Detector {
 		if (result != null) {
 			return result;
 		}
-		return attemptDecode(Base64.getUrlDecoder(), str, options);
+		result = attemptDecode(Base64.getUrlDecoder(), str, options);
+		if (result != null) {
+			return result;
+		}
+		// MIME decoder ignores embedded whitespace (PEM line-wrapped Base64)
+		if (str.indexOf('\n') >= 0 || str.indexOf('\r') >= 0) {
+			return attemptDecode(Base64.getMimeDecoder(), str, options);
+		}
+		return null;
 	}
 
 	private static String attemptDecode(Base64.Decoder decoder, String str, B64DeobfuscateOptions options) {
@@ -107,7 +116,7 @@ public final class B64Detector {
 	 * Invalid UTF-8 bytes are replaced rather than causing a rejection.
 	 */
 	public static String decodeForced(String str, int maxCommentLength) {
-		for (Base64.Decoder decoder : new Base64.Decoder[]{Base64.getDecoder(), Base64.getUrlDecoder()}) {
+		for (Base64.Decoder decoder : new Base64.Decoder[]{Base64.getDecoder(), Base64.getUrlDecoder(), Base64.getMimeDecoder()}) {
 			try {
 				byte[] bytes = decoder.decode(str);
 				CharsetDecoder utf8 = StandardCharsets.UTF_8.newDecoder()

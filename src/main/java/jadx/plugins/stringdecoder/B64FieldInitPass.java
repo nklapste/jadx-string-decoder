@@ -10,8 +10,11 @@ import jadx.api.plugins.pass.impl.OrderedJadxPassInfo;
 import jadx.api.plugins.pass.types.JadxDecompilePass;
 import jadx.core.dex.attributes.AType;
 import jadx.core.dex.attributes.FieldInitInsnAttr;
+import jadx.core.dex.info.FieldInfo;
 import jadx.core.dex.info.MethodInfo;
 import jadx.core.dex.instructions.ConstStringNode;
+import jadx.core.dex.instructions.IndexInsnNode;
+import jadx.core.dex.instructions.InsnType;
 import jadx.core.dex.instructions.InvokeNode;
 import jadx.core.dex.instructions.args.InsnArg;
 import jadx.core.dex.instructions.args.InsnWrapArg;
@@ -95,11 +98,68 @@ public class B64FieldInitPass implements JadxDecompilePass {
 				if (annotateField(field, str, isBase64Call)) {
 					return true;
 				}
+			} else if (argInsn.getType() == InsnType.SGET) {
+				// const-string may have been replaced by an SGET to a CONSTANT_VALUE field
+				// (JADX's replaceConsts rewrites const-string to sget when a matching field exists)
+				String str = resolveConstStringFromSget(field, (IndexInsnNode) argInsn);
+				if (str != null) {
+					if (annotateField(field, str, isBase64Call)) {
+						// The string is a direct Base64.decode arg — also force-annotate the source
+						// String field so it gets a comment even if it fails the alphanumeric check
+						if (isBase64Call) {
+							forceAnnotateSourceField(field, (IndexInsnNode) argInsn, str);
+						}
+						return true;
+					}
+				}
 			} else if (findAndAnnotateInArgTree(field, argInsn, depth + 1)) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * When a CONSTANT_VALUE String field is the direct arg to a Base64.decode call,
+	 * force-annotates it so the source field gets a comment regardless of the alphanumeric
+	 * threshold (the explicit decode call is sufficient evidence of intent).
+	 */
+	private void forceAnnotateSourceField(FieldNode contextField, IndexInsnNode sgetInsn, String str) {
+		FieldInfo refFieldInfo = (FieldInfo) sgetInsn.getIndex();
+		ClassNode declCls = contextField.root().resolveClass(refFieldInfo.getDeclClass());
+		if (declCls == null) {
+			return;
+		}
+		FieldNode srcField = declCls.searchField(refFieldInfo);
+		if (srcField == null || srcField.get(AType.FIELD_INIT_INSN) != null) {
+			return;
+		}
+		String decoded = B64Detector.decodeForced(str, options.getMaxCommentLength());
+		if (decoded != null) {
+			srcField.addCodeComment("b64: " + decoded);
+		}
+	}
+
+	/** Follows an SGET to the referenced field's CONSTANT_VALUE string, or returns null. */
+	private static String resolveConstStringFromSget(FieldNode contextField, IndexInsnNode sgetInsn) {
+		FieldInfo refFieldInfo = (FieldInfo) sgetInsn.getIndex();
+		RootNode root = contextField.root();
+		ClassNode declCls = root.resolveClass(refFieldInfo.getDeclClass());
+		if (declCls == null) {
+			return null;
+		}
+		FieldNode refField = declCls.searchField(refFieldInfo);
+		if (refField == null) {
+			return null;
+		}
+		EncodedValue constVal = refField.get(JadxAttrType.CONSTANT_VALUE);
+		if (constVal != null && constVal.getType() == EncodedType.ENCODED_STRING) {
+			Object val = constVal.getValue();
+			if (val instanceof String) {
+				return (String) val;
+			}
+		}
+		return null;
 	}
 
 	private static InsnNode resolveArgInsn(InsnArg arg) {

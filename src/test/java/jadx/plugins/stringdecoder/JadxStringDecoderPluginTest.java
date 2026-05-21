@@ -229,6 +229,23 @@ class JadxStringDecoderPluginTest {
 	}
 
 	@Test
+	public void multilineFieldB64Test() throws Exception {
+		// PEM-style line-wrapped Base64 string passed to Base64.decode — MIME decoder required
+		// Both the String CONSTANT_VALUE field and the byte[] result field should be annotated
+		String code = decompileSmali("b64/multiline_field_b64.smali");
+		System.out.println(code);
+		assertThat(code).contains("b64: Hello, World!");
+	}
+
+	@Test
+	public void pemB64FieldTest() throws Exception {
+		// PEM Base64 String CONSTANT_VALUE + byte[] field via Base64.decode — both should get b64: comment
+		String code = decompileSmali("b64/pem_b64_field.smali");
+		System.out.println(code);
+		assertThat(code).contains("b64:");
+	}
+
+	@Test
 	public void byteArrayStringPassDisabledTest() throws Exception {
 		// with enableByteArrayStringPass=false the bytes: comment must not appear
 		String code = decompileSmali("bytes/byte_array_string.smali",
