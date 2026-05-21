@@ -33,7 +33,7 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 				.setter(v -> minPrintablePercent = v);
 		intOption(JadxStringDecoderPlugin.PLUGIN_ID + ".minAlphanumericPercent")
 				.description("Minimum percentage of alphanumeric chars in decoded string (0 = disabled); helps reject symbol-heavy garbage decodes")
-				.defaultValue(0)
+				.defaultValue(35)
 				.setter(v -> minAlphanumericPercent = v);
 		boolOption(JadxStringDecoderPlugin.PLUGIN_ID + ".requirePadding")
 				.description("Only flag strings that end with '=' padding; reduces false positives from identifiers and short words")
