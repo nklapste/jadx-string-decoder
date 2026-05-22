@@ -42,7 +42,7 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 				.defaultValue(35)
 				.setter(v -> minAlphanumericPercent = v);
 		boolOption(JadxStringDecoderPlugin.PLUGIN_ID + ".requireValidLength")
-				.description("Only flag strings whose total length (including any '=' padding) is divisible by 4; rejects structurally invalid Base64")
+				.description("Only flag strings whose total length is divisible by 4; rejects structurally invalid Base64")
 				.defaultValue(false)
 				.setter(v -> requireValidLength = v);
 		boolOption(JadxStringDecoderPlugin.PLUGIN_ID + ".skipCamelCase")
@@ -54,7 +54,7 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 				.defaultValue(true)
 				.setter(v -> skipPascalCase = v);
 		boolOption(JadxStringDecoderPlugin.PLUGIN_ID + ".skipSnakeCase")
-				.description("Skip short strings that are all-uppercase (CURSOR, FOO_BAR) or all-lowercase (closed, foo_bar) — these are almost never intentional Base64")
+				.description("Skip short strings that are all-uppercase (CURSOR, FOO_BAR) or all-lowercase (closed, foo_bar)")
 				.defaultValue(true)
 				.setter(v -> skipSnakeCase = v);
 		boolOption(JadxStringDecoderPlugin.PLUGIN_ID + ".skipDictionaryWords")
