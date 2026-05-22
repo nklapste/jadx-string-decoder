@@ -3,6 +3,7 @@ package jadx.plugins.stringdecoder;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import javax.swing.BoxLayout;
@@ -87,20 +88,26 @@ public class JadxStringDecoderPlugin implements JadxPlugin {
 			@Override
 			public JComponent buildComponent() {
 				if (panel == null) {
+					Set<String> generalSuffixes = Set.of("minInputLength", "maxCommentLength", "minDecodedLength");
 					List<OptionDescription> allOpts = options.getOptionsDescriptions();
-					List<OptionDescription> b64Opts = allOpts.stream()
-							.filter(o -> !o.name().toLowerCase().contains("bytearray"))
+					List<OptionDescription> generalOpts = allOpts.stream()
+							.filter(o -> generalSuffixes.stream().anyMatch(s -> o.name().endsWith("." + s)))
 							.collect(Collectors.toList());
 					List<OptionDescription> byteArrayOpts = allOpts.stream()
 							.filter(o -> o.name().toLowerCase().contains("bytearray"))
 							.collect(Collectors.toList());
+					List<OptionDescription> b64Opts = allOpts.stream()
+							.filter(o -> !generalOpts.contains(o) && !byteArrayOpts.contains(o))
+							.collect(Collectors.toList());
 
 					panel = new JPanel();
 					panel.setLayout(new BoxLayout(panel, BoxLayout.PAGE_AXIS));
+					panel.add(JadxStringDecoderPlugin.buildSection(guiCtx, "General", generalOpts,
+							"* Options shared across all detection passes."));
 					panel.add(JadxStringDecoderPlugin.buildSection(guiCtx, "B64 String Decoder", b64Opts,
-							"Adds `// b64: <DECODED_VALUE>` comments to Base64-encoded string/field initializers."));
+							"* Adds // b64: <DECODED_VALUE> comments to Base64-encoded string/field initializers."));
 					panel.add(JadxStringDecoderPlugin.buildSection(guiCtx, "Byte Array String Decoder", byteArrayOpts,
-							"Adds `// bytes: <DECODED_VALUE>` comments to byte[] fields that decode to printable strings."));
+							"* Adds // bytes: <DECODED_VALUE> comments to byte[] fields that decode to printable strings."));
 				}
 				return panel;
 			}
