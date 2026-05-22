@@ -82,8 +82,10 @@ public class B64FieldInitPass implements JadxDecompilePass {
 	 * unconditionally (the call itself is strong evidence of intent).
 	 * Otherwise, applies normal false-positive checks via {@link B64Detector#detect}.
 	 */
+	private static final int MAX_ARG_TREE_DEPTH = 8;
+
 	private boolean findAndAnnotateInArgTree(FieldNode field, InsnNode insn, int depth) {
-		if (insn == null || depth > 8) {
+		if (insn == null || depth > MAX_ARG_TREE_DEPTH) {
 			return false;
 		}
 		boolean isBase64Call = isBase64DecodeCall(insn);

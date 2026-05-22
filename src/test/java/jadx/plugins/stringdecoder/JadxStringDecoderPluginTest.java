@@ -268,6 +268,14 @@ class JadxStringDecoderPluginTest {
 	}
 
 	@Test
+	public void urlSafeB64Test() throws Exception {
+		// "SGVsbG9-" is URL-safe Base64 for "Hello~" — '-' maps to index 62 (standard '+')
+		String code = decompileSmali("b64/urlsafe_b64.smali");
+		System.out.println(code);
+		assertThat(code).contains("b64: Hello~");
+	}
+
+	@Test
 	public void byteArrayStringPassDisabledTest() throws Exception {
 		// with enableByteArrayStringPass=false the bytes: comment must not appear
 		String code = decompileSmali("bytes/byte_array_string.smali",

@@ -120,7 +120,9 @@ public final class B64Detector {
 		if (!BASE64_STANDARD.matcher(str).matches() && !BASE64_URL_SAFE.matcher(str).matches()) {
 			return null;
 		}
-		for (Base64.Decoder decoder : STANDARD_AND_URL) {
+		Base64.Decoder[] decoders = (str.indexOf('\n') >= 0 || str.indexOf('\r') >= 0)
+				? ALL_DECODERS : STANDARD_AND_URL;
+		for (Base64.Decoder decoder : decoders) {
 			try {
 				byte[] bytes = decoder.decode(str);
 				CharsetDecoder utf8 = StandardCharsets.UTF_8.newDecoder()

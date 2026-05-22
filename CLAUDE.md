@@ -55,11 +55,11 @@ Looks for `byte[]` fields initialised with a `FilledNewArrayNode` of all literal
 
 `B64Detector.detect(String, B64DeobfuscateOptions)` applies a pipeline of filters (all thresholds configurable via options):
 
-1. Minimum encoded length (`minInputLength`, default 8)
-2. Require `=` padding suffix (`requirePadding`, default false)
-3. Skip identifier-like strings matching `^[A-Za-z][A-Za-z0-9]*$` (`skipIdentifiers`, default false)
+1. Blocklist check (`B64FalsePositives`) — known false positives (e.g. Android class names) rejected first
+2. Minimum encoded length (`minInputLength`, default 8)
+3. Require `=` padding suffix (`requirePadding`, default false)
 4. Charset validation — must match standard or URL-safe Base64 alphabet
-5. Attempt decode with `Base64.getDecoder()`, then `Base64.getUrlDecoder()`
+5. Attempt decode with `Base64.getDecoder()`, then `Base64.getUrlDecoder()`; MIME decoder used if string contains `\n`/`\r`
 6. Strict UTF-8 decode (`CodingErrorAction.REPORT`)
 7. Minimum printable-ASCII ratio (`minPrintablePercent`, default 90%)
 8. Minimum alphanumeric ratio (`minAlphanumericPercent`, default 35%)
