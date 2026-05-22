@@ -81,8 +81,12 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 				String str = csn.getString();
 
 				// If the string is an arg to an explicit Base64.decode call, decode unconditionally.
-				// The call itself is strong evidence of intent — skip false-positive heuristics.
+				// The call itself is strong evidence of intent — skip false-positive heuristics,
+				// but still respect the explicit blocklist.
 				boolean forced = isUsedAsBase64DecodeArg(csn);
+				if (forced && B64FalsePositives.contains(str)) {
+					forced = false;
+				}
 				B64Result decoded = forced
 						? B64Detector.decodeForced(str, options.getMaxCommentLength())
 						: B64Detector.detect(str, options);

@@ -13,6 +13,9 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 	private int minAlphanumericPercent;
 	private boolean requireValidLength;
 	private boolean skipCamelCase;
+	private boolean skipPascalCase;
+	private boolean skipSnakeCase;
+	private boolean skipDictionaryWords;
 
 	@Override
 	public void registerOptions() {
@@ -46,6 +49,18 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 				.description("Skip short strings that look like camelCase identifiers (e.g. getContext, fillItem)")
 				.defaultValue(true)
 				.setter(v -> skipCamelCase = v);
+		boolOption(JadxStringDecoderPlugin.PLUGIN_ID + ".skipPascalCase")
+				.description("Skip short strings that look like PascalCase type names (e.g. FileUtil, SecureRandom)")
+				.defaultValue(true)
+				.setter(v -> skipPascalCase = v);
+		boolOption(JadxStringDecoderPlugin.PLUGIN_ID + ".skipSnakeCase")
+				.description("Skip short strings that are all-uppercase (CURSOR, FOO_BAR) or all-lowercase (closed, foo_bar) — these are almost never intentional Base64")
+				.defaultValue(true)
+				.setter(v -> skipSnakeCase = v);
+		boolOption(JadxStringDecoderPlugin.PLUGIN_ID + ".skipDictionaryWords")
+				.description("Skip strings whose segments (split on camelCase/underscore boundaries) are all common programming/English words")
+				.defaultValue(true)
+				.setter(v -> skipDictionaryWords = v);
 
 		// ByteArrayStringPass options
 		boolOption(JadxStringDecoderPlugin.PLUGIN_ID + ".enableByteArrayStringPass")
@@ -88,6 +103,18 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 
 	public boolean isSkipCamelCase() {
 		return skipCamelCase;
+	}
+
+	public boolean isSkipPascalCase() {
+		return skipPascalCase;
+	}
+
+	public boolean isSkipSnakeCase() {
+		return skipSnakeCase;
+	}
+
+	public boolean isSkipDictionaryWords() {
+		return skipDictionaryWords;
 	}
 
 	public int getMinDecodedLength() {

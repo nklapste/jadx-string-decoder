@@ -15,6 +15,12 @@ public final class B64Detector {
 	private static final Pattern BASE64_URL_SAFE = Pattern.compile("^[A-Za-z0-9_\\-\\n\\r]*=*[\\n\\r]*$");
 	// camelCase: starts with lowercase run, then one or more UppercaseLowercase+ groups, no digits/symbols
 	private static final Pattern CAMEL_CASE = Pattern.compile("^[a-z]+([A-Z][a-z]+)+$");
+	// PascalCase: starts with exactly one uppercase, then a lowercase run, then more UpperLower groups
+	private static final Pattern PASCAL_CASE = Pattern.compile("^[A-Z][a-z]+([A-Z][a-z0-9]+)+$");
+	// all-uppercase (letters, digits, hyphens, underscores) — covers CURSOR, UTF-16BE, FOO_BAR, SETTING
+	private static final Pattern ALL_CAPS = Pattern.compile("^[A-Z][A-Z0-9\\-_]*$");
+	// all-lowercase (letters, digits, underscores) — covers foo_bar, closed, callback, binding
+	private static final Pattern ALL_LOWER = Pattern.compile("^[a-z][a-z0-9_]*$");
 	private static final Base64.Decoder[] STANDARD_AND_URL = { Base64.getDecoder(), Base64.getUrlDecoder() };
 	private static final Base64.Decoder[] ALL_DECODERS = { Base64.getDecoder(), Base64.getUrlDecoder(), Base64.getMimeDecoder() };
 	private static final String[] STANDARD_AND_URL_TAGS = { "", "url" };
@@ -35,6 +41,16 @@ public final class B64Detector {
 			return null;
 		}
 		if (options.isSkipCamelCase() && str.length() < 40 && CAMEL_CASE.matcher(str).matches()) {
+			return null;
+		}
+		if (options.isSkipPascalCase() && str.length() < 40 && PASCAL_CASE.matcher(str).matches()) {
+			return null;
+		}
+		if (options.isSkipSnakeCase() && str.length() < 40
+				&& (ALL_CAPS.matcher(str).matches() || ALL_LOWER.matcher(str).matches())) {
+			return null;
+		}
+		if (options.isSkipDictionaryWords() && str.length() < 40 && B64DictionaryFilter.isAllDictionaryWords(str)) {
 			return null;
 		}
 		if (!BASE64_STANDARD.matcher(str).matches() && !BASE64_URL_SAFE.matcher(str).matches()) {

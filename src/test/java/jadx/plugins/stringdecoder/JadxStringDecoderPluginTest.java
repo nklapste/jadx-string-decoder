@@ -287,6 +287,79 @@ class JadxStringDecoderPluginTest {
 	}
 
 	@Test
+	public void allCapsNotFlaggedTest() throws Exception {
+		// "CURSOR" is all-uppercase and decodes to "\tDR9" — suppressed by skipSnakeCase (default true)
+		String code = decompileSmali("b64/allcaps_b64.smali");
+		System.out.println(code);
+		assertThat(code).doesNotContain("b64:");
+	}
+
+	@Test
+	public void allCapsSkipDisabledTest() throws Exception {
+		// With skipSnakeCase=false, "CURSOR" is no longer suppressed by the pattern filter;
+		// it decodes to "\tDR9" (75% printable), which fails the 90% default printable threshold
+		String code = decompileSmali("b64/allcaps_b64.smali",
+				Map.of(opt("skipSnakeCase"), "false"));
+		System.out.println(code);
+		assertThat(code).doesNotContain("b64:");
+	}
+
+	@Test
+	public void allLowerNotFlaggedTest() throws Exception {
+		// "closed" is all-lowercase and decodes to "rZ,y" — suppressed by skipSnakeCase (default true)
+		String code = decompileSmali("b64/alllower_b64.smali");
+		System.out.println(code);
+		assertThat(code).doesNotContain("b64:");
+	}
+
+	@Test
+	public void allLowerSkipDisabledTest() throws Exception {
+		// With both skipSnakeCase and skipDictionaryWords disabled, "closed" passes all filters;
+		// it decodes to "rZ,y" (100% printable) and gets a b64: comment
+		String code = decompileSmali("b64/alllower_b64.smali",
+				Map.of(opt("skipSnakeCase"), "false", opt("skipDictionaryWords"), "false"));
+		System.out.println(code);
+		assertThat(code).contains("b64: rZ,y");
+	}
+
+	@Test
+	public void dictionaryWordNotFlaggedTest() throws Exception {
+		// "callback" is a single dictionary word and valid Base64 charset — but decodes to
+		// invalid UTF-8 bytes so no comment is expected regardless of dictionary filter state
+		String code = decompileSmali("b64/dict_word_b64.smali");
+		System.out.println(code);
+		assertThat(code).doesNotContain("b64:");
+	}
+
+	@Test
+	public void dictionarySkipDisabledTest() throws Exception {
+		// Disabling skipDictionaryWords must not crash; "callback" is still rejected by the
+		// UTF-8 decode step so no b64: comment is expected
+		String code = decompileSmali("b64/dict_word_b64.smali",
+				Map.of(opt("skipDictionaryWords"), "false"));
+		System.out.println(code);
+		assertThat(code).doesNotContain("b64:");
+	}
+
+	@Test
+	public void pascalCaseNotFlaggedTest() throws Exception {
+		// "FileUtil" matches PascalCase — suppressed by skipPascalCase (default true)
+		String code = decompileSmali("b64/pascalcase_b64.smali");
+		System.out.println(code);
+		assertThat(code).doesNotContain("b64:");
+	}
+
+	@Test
+	public void pascalCaseSkipDisabledTest() throws Exception {
+		// With skipPascalCase=false, "FileUtil" is no longer suppressed by the pattern filter;
+		// it decodes to bytes that are ~60% printable, failing the 90% default threshold
+		String code = decompileSmali("b64/pascalcase_b64.smali",
+				Map.of(opt("skipPascalCase"), "false"));
+		System.out.println(code);
+		assertThat(code).doesNotContain("b64:");
+	}
+
+	@Test
 	public void byteArrayStringPassDisabledTest() throws Exception {
 		// with enableByteArrayStringPass=false the bytes: comment must not appear
 		String code = decompileSmali("bytes/byte_array_string.smali",
