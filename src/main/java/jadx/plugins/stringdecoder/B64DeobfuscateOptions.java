@@ -34,7 +34,7 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 				.defaultValue(8)
 				.setter(v -> minInputLength = v);
 		intOption(JadxStringDecoderPlugin.PLUGIN_ID + ".maxCommentLength")
-				.description("Maximum decoded string length in comment (0 for unlimited)")
+				.description("Maximum decoded string length in comment before truncating with '...' (0 for unlimited)")
 				.defaultValue(100)
 				.setter(v -> maxCommentLength = v);
 		intOption(JadxStringDecoderPlugin.PLUGIN_ID + ".minPrintablePercent")
