@@ -13,6 +13,8 @@ public final class B64Detector {
 	// Allow embedded \n/\r (PEM/MIME line-wrapped Base64); = padding and trailing newline are optional
 	private static final Pattern BASE64_STANDARD = Pattern.compile("^[A-Za-z0-9+/\\n\\r]*=*[\\n\\r]*$");
 	private static final Pattern BASE64_URL_SAFE = Pattern.compile("^[A-Za-z0-9_\\-\\n\\r]*=*[\\n\\r]*$");
+	// camelCase: starts with lowercase run, then one or more UppercaseLowercase+ groups, no digits/symbols
+	private static final Pattern CAMEL_CASE = Pattern.compile("^[a-z]+([A-Z][a-z]+)+$");
 	private static final Base64.Decoder[] STANDARD_AND_URL = { Base64.getDecoder(), Base64.getUrlDecoder() };
 	private static final Base64.Decoder[] ALL_DECODERS = { Base64.getDecoder(), Base64.getUrlDecoder(), Base64.getMimeDecoder() };
 
@@ -31,6 +33,9 @@ public final class B64Detector {
 			return null;
 		}
 		if (options.isRequirePadding() && !str.endsWith("=")) {
+			return null;
+		}
+		if (options.isSkipCamelCase() && str.length() < 40 && CAMEL_CASE.matcher(str).matches()) {
 			return null;
 		}
 		if (!BASE64_STANDARD.matcher(str).matches() && !BASE64_URL_SAFE.matcher(str).matches()) {

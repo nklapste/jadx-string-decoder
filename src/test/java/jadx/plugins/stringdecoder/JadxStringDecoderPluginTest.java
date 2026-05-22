@@ -129,9 +129,9 @@ class JadxStringDecoderPluginTest {
 
 	@Test
 	public void lowPrintableThresholdOptionTest() throws Exception {
-		// Lowering minPrintablePercent to 75 (old default) causes "fillItem" to be flagged again
+		// Lowering minPrintablePercent to 75 and disabling skipCamelCase causes "fillItem" to be flagged
 		String code = decompileSmali("b64/identifier_like_b64.smali",
-				Map.of(opt("minPrintablePercent"), "75"));
+				Map.of(opt("minPrintablePercent"), "75", opt("skipCamelCase"), "false"));
 		System.out.println(code);
 		assertThat(code).contains("b64:");
 	}
@@ -273,6 +273,25 @@ class JadxStringDecoderPluginTest {
 		String code = decompileSmali("b64/urlsafe_b64.smali");
 		System.out.println(code);
 		assertThat(code).contains("b64: Hello~");
+	}
+
+	@Test
+	public void camelCaseNotFlaggedTest() throws Exception {
+		// "getContext" matches camelCase pattern — should be suppressed by default
+		String code = decompileSmali("b64/camelcase_b64.smali");
+		System.out.println(code);
+		assertThat(code).doesNotContain("b64:");
+	}
+
+	@Test
+	public void camelCaseSkipDisabledTest() throws Exception {
+		// with skipCamelCase=false, "getContext" is no longer suppressed by the camelCase filter;
+		// other filters (printable ratio, alnum ratio) will still apply
+		String code = decompileSmali("b64/camelcase_b64.smali",
+				Map.of(opt("skipCamelCase"), "false"));
+		System.out.println(code);
+		// "getContext" decodes to non-UTF-8 bytes so no comment expected even without the filter
+		assertThat(code).doesNotContain("b64:");
 	}
 
 	@Test
