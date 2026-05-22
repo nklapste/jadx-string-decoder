@@ -43,7 +43,7 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 				.setter(v -> minAlphanumericPercent = v);
 		boolOption(JadxStringDecoderPlugin.PLUGIN_ID + ".requireValidLength")
 				.description("Only flag strings whose total length is divisible by 4; rejects structurally invalid Base64")
-				.defaultValue(false)
+				.defaultValue(true)
 				.setter(v -> requireValidLength = v);
 		boolOption(JadxStringDecoderPlugin.PLUGIN_ID + ".skipCamelCase")
 				.description("Skip short strings that look like camelCase identifiers (e.g. getContext, fillItem)")
