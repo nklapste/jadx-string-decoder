@@ -50,7 +50,7 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 				.defaultValue(false)
 				.setter(v -> requireValidLength = v);
 		boolOption(JadxStringDecoderPlugin.PLUGIN_ID + ".skipCamelCase")
-				.description("Skip strings that look like camelCase identifiers (e.g. getContext, fillItem); they are almost never intentional Base64")
+				.description("Skip short strings that look like camelCase identifiers (e.g. getContext, fillItem)")
 				.defaultValue(true)
 				.setter(v -> skipCamelCase = v);
 		intOption(JadxStringDecoderPlugin.PLUGIN_ID + ".minDecodedLength")
