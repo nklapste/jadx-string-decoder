@@ -21,6 +21,9 @@ private B64Detector() {
 	 * All detection thresholds are taken from {@code options}.
 	 */
 	public static String detect(String str, B64DeobfuscateOptions options) {
+		if (B64FalsePositives.contains(str)) {
+			return null;
+		}
 		if (str.length() < options.getMinInputLength()) {
 			return null;
 		}

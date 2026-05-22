@@ -260,6 +260,14 @@ class JadxStringDecoderPluginTest {
 	}
 
 	@Test
+	public void falsePositiveSystemJobSchedulerTest() throws Exception {
+		// "SystemJobScheduler" is a known Android class name that slips past ratio filters
+		String code = decompileSmali("b64/false_positive_system_job_scheduler.smali");
+		System.out.println(code);
+		assertThat(code).doesNotContain("b64:");
+	}
+
+	@Test
 	public void byteArrayStringPassDisabledTest() throws Exception {
 		// with enableByteArrayStringPass=false the bytes: comment must not appear
 		String code = decompileSmali("bytes/byte_array_string.smali",
