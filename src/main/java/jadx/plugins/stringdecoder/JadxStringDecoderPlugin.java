@@ -98,9 +98,9 @@ public class JadxStringDecoderPlugin implements JadxPlugin {
 					panel = new JPanel();
 					panel.setLayout(new BoxLayout(panel, BoxLayout.PAGE_AXIS));
 					panel.add(JadxStringDecoderPlugin.buildSection(guiCtx, "B64 String Decoder", b64Opts,
-							"* Adds // b64: <DECODED_VALUE> comments to Base64-encoded string/field initializers."));
+							"Adds `// b64: <DECODED_VALUE>` comments to Base64-encoded string/field initializers."));
 					panel.add(JadxStringDecoderPlugin.buildSection(guiCtx, "Byte Array String Decoder", byteArrayOpts,
-							"* Adds // bytes: <DECODED_VALUE> comments to byte[] fields that decode to printable strings."));
+							"Adds `// bytes: <DECODED_VALUE>` comments to byte[] fields that decode to printable strings."));
 				}
 				return panel;
 			}
