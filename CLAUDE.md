@@ -57,14 +57,15 @@ Looks for `byte[]` fields initialised with a `FilledNewArrayNode` of all literal
 
 1. Blocklist check (`B64FalsePositives`) — known false positives (e.g. Android class names) rejected first
 2. Minimum encoded length (`minInputLength`, default 8)
-3. Require `=` padding suffix (`requirePadding`, default false)
-4. Charset validation — must match standard or URL-safe Base64 alphabet
-5. Attempt decode with `Base64.getDecoder()`, then `Base64.getUrlDecoder()`; MIME decoder used if string contains `\n`/`\r`
-6. Strict UTF-8 decode (`CodingErrorAction.REPORT`)
-7. Minimum printable-ASCII ratio (`minPrintablePercent`, default 90%)
-8. Minimum alphanumeric ratio (`minAlphanumericPercent`, default 35%)
-9. Minimum decoded length (`minDecodedLength`, default 0 = disabled)
-10. Truncation (`maxCommentLength`, default 100; 0 = unlimited)
+3. Require valid Base64 length (`requireValidLength`, default false) — total length must be divisible by 4
+4. Skip camelCase identifiers (`skipCamelCase`, default true) — rejects strings matching `^[a-z]+([A-Z][a-z]+)+$` under 40 chars
+5. Charset validation — must match standard or URL-safe Base64 alphabet
+6. Attempt decode with `Base64.getDecoder()`, then `Base64.getUrlDecoder()`; MIME decoder used if string contains `\n`/`\r`
+7. Strict UTF-8 decode (`CodingErrorAction.REPORT`)
+8. Minimum printable-ASCII ratio (`minPrintablePercent`, default 90%)
+9. Minimum alphanumeric ratio (`minAlphanumericPercent`, default 35%)
+10. Minimum decoded length (`minDecodedLength`, default 0 = disabled)
+11. Truncation (`maxCommentLength`, default 100; 0 = unlimited)
 
 `B64Detector.decodeForced(String, int)` skips steps 1–9 and uses `CodingErrorAction.REPLACE` instead of `REPORT`. Used when the string is an explicit arg to a `Base64.decode` call.
 
