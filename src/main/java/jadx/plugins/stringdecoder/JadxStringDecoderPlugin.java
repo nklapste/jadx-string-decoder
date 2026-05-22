@@ -28,7 +28,7 @@ public class JadxStringDecoderPlugin implements JadxPlugin {
 	public JadxPluginInfo getPluginInfo() {
 		return JadxPluginInfoBuilder.pluginId(PLUGIN_ID)
 				.name("String Decoder")
-				.description("Detect likely Base64-encoded string constants and add decoded value as a comment")
+				.description("Detect encoded string constants and note their decoded values in a comment")
 				.homepage("https://github.com/nklapste/jadx-string-decoder")
 				.requiredJadxVersion("1.5.1, r2333")
 				.build();
@@ -88,7 +88,7 @@ public class JadxStringDecoderPlugin implements JadxPlugin {
 			@Override
 			public JComponent buildComponent() {
 				if (panel == null) {
-					Set<String> generalSuffixes = Set.of("maxCommentLength", "minDecodedLength");
+					Set<String> generalSuffixes = Set.of("minInputLength", "maxCommentLength", "minDecodedLength");
 					List<OptionDescription> allOpts = options.getOptionsDescriptions();
 					List<OptionDescription> generalOpts = allOpts.stream()
 							.filter(o -> generalSuffixes.stream().anyMatch(s -> o.name().endsWith("." + s)))
