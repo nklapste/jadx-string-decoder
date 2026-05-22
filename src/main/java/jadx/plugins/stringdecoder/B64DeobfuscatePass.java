@@ -99,22 +99,24 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 					// Determine the best available decoded value for this slot
 					String candidate = decoded != null ? decoded
 							: B64Detector.decodeIfValid(str, options.getMaxCommentLength());
-					if (candidate != null) {
-						if (fieldConstants == null) {
-							fieldConstants = collectConstantValueFieldStrings(mth.getParentClass());
+					if (candidate == null) {
+						continue;
+					}
+					if (fieldConstants == null) {
+						fieldConstants = collectConstantValueFieldStrings(mth.getParentClass());
+					}
+					if (fieldConstants.contains(str)) {
+						continue;
+					}
+					if (arrayCandidates == null) {
+						arrayCandidates = new LinkedHashMap<>();
+					}
+					arrayCandidates.computeIfAbsent(arrayParent, k -> new TreeMap<>()).put(idx, candidate);
+					if (decoded != null) {
+						if (arrayAnchors == null) {
+							arrayAnchors = new LinkedHashSet<>();
 						}
-						if (!fieldConstants.contains(str)) {
-							if (arrayCandidates == null) {
-								arrayCandidates = new LinkedHashMap<>();
-							}
-							arrayCandidates.computeIfAbsent(arrayParent, k -> new TreeMap<>()).put(idx, candidate);
-							if (decoded != null) {
-								if (arrayAnchors == null) {
-									arrayAnchors = new LinkedHashSet<>();
-								}
-								arrayAnchors.add(arrayParent);
-							}
-						}
+						arrayAnchors.add(arrayParent);
 					}
 					continue;
 				}
