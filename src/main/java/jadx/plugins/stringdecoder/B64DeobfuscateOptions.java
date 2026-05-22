@@ -42,7 +42,7 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 				.defaultValue(90)
 				.setter(v -> minPrintablePercent = v);
 		intOption(JadxStringDecoderPlugin.PLUGIN_ID + ".minAlphanumericPercent")
-				.description("Minimum percentage of alphanumeric chars in decoded string (0 = disabled); helps reject symbol-heavy garbage decodes")
+				.description("Minimum percentage of alphanumeric chars in decoded string (0-100); helps reject symbol-heavy garbage decodes")
 				.defaultValue(35)
 				.setter(v -> minAlphanumericPercent = v);
 		boolOption(JadxStringDecoderPlugin.PLUGIN_ID + ".requireValidLength")
