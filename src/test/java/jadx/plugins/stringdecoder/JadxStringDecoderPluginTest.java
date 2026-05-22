@@ -314,10 +314,12 @@ class JadxStringDecoderPluginTest {
 
 	@Test
 	public void allLowerSkipDisabledTest() throws Exception {
-		// With both skipSnakeCase and skipDictionaryWords disabled, "closed" passes all filters;
-		// it decodes to "rZ,y" (100% printable) and gets a b64: comment
+		// With skipSnakeCase, skipDictionaryWords, and requireValidLength disabled,
+		// "closed" (6 chars) passes all filters and decodes to "rZ,y" (100% printable)
 		String code = decompileSmali("b64/alllower_b64.smali",
-				Map.of(opt("skipSnakeCase"), "false", opt("skipDictionaryWords"), "false"));
+				Map.of(opt("skipSnakeCase"), "false",
+						opt("skipDictionaryWords"), "false",
+						opt("requireValidLength"), "false"));
 		System.out.println(code);
 		assertThat(code).contains("b64: rZ,y");
 	}
