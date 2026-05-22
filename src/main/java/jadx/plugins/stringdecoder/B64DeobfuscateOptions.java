@@ -23,7 +23,7 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 				.setter(v -> maxCommentLength = v);
 		intOption(JadxStringDecoderPlugin.PLUGIN_ID + ".minDecodedLength")
 				.description("Minimum decoded string length to add a comment (0 = disabled); helps reject short garbage decodes")
-				.defaultValue(0)
+				.defaultValue(4)
 				.setter(v -> minDecodedLength = v);
 		// B64DeobfuscatePass options
 		boolOption(JadxStringDecoderPlugin.PLUGIN_ID + ".enableB64DecodePass")
