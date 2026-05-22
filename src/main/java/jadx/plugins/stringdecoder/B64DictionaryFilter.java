@@ -38,7 +38,7 @@ final class B64DictionaryFilter {
 					}
 				}
 			}
-		} catch (Exception ignored) {
+		} catch (java.io.IOException ignored) {
 		}
 		return words;
 	}

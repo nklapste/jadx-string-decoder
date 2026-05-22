@@ -95,7 +95,8 @@ public final class B64Detector {
 			return new B64Result(truncate(decoded, options.getMaxCommentLength()), tag);
 		} catch (CharacterCodingException ignored) {
 			// decoded bytes are not valid UTF-8
-		} catch (Exception ignored) {
+		} catch (IllegalArgumentException ignored) {
+			// decoder.decode() rejects malformed Base64
 		}
 		return null;
 	}
@@ -148,7 +149,8 @@ public final class B64Detector {
 						.onUnmappableCharacter(CodingErrorAction.REPORT);
 				String decoded = utf8.decode(ByteBuffer.wrap(bytes)).toString();
 				return new B64Result(truncate(decoded, maxCommentLength), tags[i]);
-			} catch (Exception ignored) {
+			} catch (IllegalArgumentException | CharacterCodingException ignored) {
+				// decoder.decode() rejects malformed Base64; utf8.decode() rejects invalid UTF-8
 			}
 		}
 		return null;
@@ -169,7 +171,8 @@ public final class B64Detector {
 						.onUnmappableCharacter(CodingErrorAction.REPLACE);
 				String decoded = utf8.decode(ByteBuffer.wrap(bytes)).toString();
 				return new B64Result(truncate(decoded, maxCommentLength), ALL_DECODER_TAGS[i]);
-			} catch (Exception ignored) {
+			} catch (IllegalArgumentException | CharacterCodingException ignored) {
+				// decoder.decode() rejects malformed Base64; utf8.decode() on REPLACE mode won't throw, but guard anyway
 			}
 		}
 		return null;
