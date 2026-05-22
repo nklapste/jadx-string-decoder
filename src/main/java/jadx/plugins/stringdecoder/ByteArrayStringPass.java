@@ -63,7 +63,7 @@ public class ByteArrayStringPass implements JadxDecompilePass {
 			return;
 		}
 		byte[] bytes = extractLiteralBytes(filledArr);
-		if (bytes == null || bytes.length < Math.max(1, options.getMinInputLength())) {
+		if (bytes == null || bytes.length == 0) {
 			return;
 		}
 		String decoded = tryDecodeAsString(bytes);

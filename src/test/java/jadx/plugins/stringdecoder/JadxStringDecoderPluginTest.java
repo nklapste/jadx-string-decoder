@@ -155,21 +155,13 @@ class JadxStringDecoderPluginTest {
 	}
 
 	@Test
-	public void minInputLengthOptionTest() throws Exception {
-		// Raising minInputLength to 24 should suppress the 8-char "aGVsbG8=" string
-		String code = decompileSmali("b64/b64_decodable.smali",
-				Map.of(opt("minInputLength"), "24"));
-		System.out.println(code);
-		assertThat(code).doesNotContain("b64:");
-	}
-
-	@Test
 	public void minAlphanumericPercentOptionTest() throws Exception {
 		// "fillItem" decodes to ~40% alphanumeric; setting minAlphanumericPercent=50 must suppress it
-		// (set printable threshold low enough to isolate the alnum check)
+		// (lower printable threshold and disable skipCamelCase to isolate the alnum check)
 		String code = decompileSmali("b64/identifier_like_b64.smali",
 				Map.of(opt("minPrintablePercent"), "75",
-						opt("minAlphanumericPercent"), "50"));
+						opt("minAlphanumericPercent"), "50",
+						opt("skipCamelCase"), "false"));
 		System.out.println(code);
 		assertThat(code).doesNotContain("b64:");
 	}

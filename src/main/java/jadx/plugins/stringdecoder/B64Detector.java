@@ -31,9 +31,6 @@ public final class B64Detector {
 		if (B64FalsePositives.contains(str)) {
 			return null;
 		}
-		if (str.length() < options.getMinInputLength()) {
-			return null;
-		}
 		if (options.isRequireValidLength() && str.length() % 4 != 0) {
 			return null;
 		}
