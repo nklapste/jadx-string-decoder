@@ -11,7 +11,7 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 	private int maxCommentLength;
 	private int minPrintablePercent;
 	private int minAlphanumericPercent;
-	private boolean requirePadding;
+	private boolean requireValidLength;
 	private boolean skipCamelCase;
 
 	@Override
@@ -40,10 +40,10 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 				.description("Minimum percentage of alphanumeric chars in decoded string (0 = disabled); helps reject symbol-heavy garbage decodes")
 				.defaultValue(35)
 				.setter(v -> minAlphanumericPercent = v);
-		boolOption(JadxStringDecoderPlugin.PLUGIN_ID + ".requirePadding")
-				.description("Only flag strings that end with '=' padding; reduces false positives from identifiers and short words")
+		boolOption(JadxStringDecoderPlugin.PLUGIN_ID + ".requireValidLength")
+				.description("Only flag strings whose total length (including any '=' padding) is divisible by 4; rejects structurally invalid Base64")
 				.defaultValue(false)
-				.setter(v -> requirePadding = v);
+				.setter(v -> requireValidLength = v);
 		boolOption(JadxStringDecoderPlugin.PLUGIN_ID + ".skipCamelCase")
 				.description("Skip strings that look like camelCase identifiers (e.g. getContext, fillItem); they are almost never intentional Base64")
 				.defaultValue(true)
@@ -78,8 +78,8 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 		return minAlphanumericPercent / 100.0;
 	}
 
-	public boolean isRequirePadding() {
-		return requirePadding;
+	public boolean isRequireValidLength() {
+		return requireValidLength;
 	}
 
 	public boolean isSkipCamelCase() {

@@ -137,19 +137,19 @@ class JadxStringDecoderPluginTest {
 	}
 
 	@Test
-	public void requirePaddingFiltersNoPaddingTest() throws Exception {
-		// "fillItem" has no '=' padding; with requirePadding=true it must not be flagged
-		String code = decompileSmali("b64/identifier_like_b64.smali",
-				Map.of(opt("requirePadding"), "yes", opt("minPrintablePercent"), "75"));
+	public void requireValidLengthFiltersOddLengthTest() throws Exception {
+		// "aGVsbG8" is 7 chars (7 % 4 != 0) — structurally invalid unpadded Base64; must not be flagged
+		String code = decompileSmali("b64/unpadded_b64.smali",
+				Map.of(opt("requireValidLength"), "yes"));
 		System.out.println(code);
 		assertThat(code).doesNotContain("b64:");
 	}
 
 	@Test
-	public void requirePaddingAllowsPaddedStringTest() throws Exception {
-		// "aGVsbG8=" ends with '='; it must still be flagged when requirePadding=true
+	public void requireValidLengthAllowsDivisibleByFourTest() throws Exception {
+		// "aGVsbG8=" is 8 chars (8 % 4 == 0) — structurally valid; must still be flagged
 		String code = decompileSmali("b64/b64_decodable.smali",
-				Map.of(opt("requirePadding"), "yes"));
+				Map.of(opt("requireValidLength"), "yes"));
 		System.out.println(code);
 		assertThat(code).contains("b64: hello");
 	}

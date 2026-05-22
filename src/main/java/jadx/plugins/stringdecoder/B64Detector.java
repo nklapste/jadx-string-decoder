@@ -32,7 +32,7 @@ public final class B64Detector {
 		if (str.length() < options.getMinInputLength()) {
 			return null;
 		}
-		if (options.isRequirePadding() && !str.endsWith("=")) {
+		if (options.isRequireValidLength() && str.length() % 4 != 0) {
 			return null;
 		}
 		if (options.isSkipCamelCase() && str.length() < 40 && CAMEL_CASE.matcher(str).matches()) {
