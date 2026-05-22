@@ -213,6 +213,8 @@ job
 join
 json
 key
+kill
+killed
 label
 lang
 layout
@@ -348,6 +350,7 @@ string
 style
 submit
 super
+system
 swipe
 sync
 tag
