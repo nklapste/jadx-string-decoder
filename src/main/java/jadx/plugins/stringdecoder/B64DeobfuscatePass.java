@@ -180,13 +180,9 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 	 */
 	private static String buildArrayComment(TreeMap<Integer, String> decodings) {
 		StringBuilder sb = new StringBuilder();
-		boolean first = true;
 		for (Map.Entry<Integer, String> e : decodings.entrySet()) {
-			if (!first) {
-				sb.append('\n');
-			}
+			sb.append('\n');
 			sb.append("b64[").append(e.getKey()).append("]: ").append(e.getValue());
-			first = false;
 		}
 		return sb.toString();
 	}
