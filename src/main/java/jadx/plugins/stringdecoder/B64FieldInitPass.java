@@ -136,9 +136,9 @@ public class B64FieldInitPass implements JadxDecompilePass {
 		if (srcField == null || srcField.get(AType.FIELD_INIT_INSN) != null) {
 			return;
 		}
-		String decoded = B64Detector.decodeForced(str, options.getMaxCommentLength());
-		if (decoded != null) {
-			srcField.addCodeComment("b64: " + decoded);
+		B64Result result = B64Detector.decodeForced(str, options.getMaxCommentLength());
+		if (result != null) {
+			srcField.addCodeComment(result.commentText());
 		}
 	}
 
@@ -191,11 +191,11 @@ public class B64FieldInitPass implements JadxDecompilePass {
 	 * Returns true if a comment was added.
 	 */
 	private boolean annotateField(FieldNode field, String str, boolean forced) {
-		String decoded = forced
+		B64Result result = forced
 				? B64Detector.decodeForced(str, options.getMaxCommentLength())
 				: B64Detector.detect(str, options);
-		if (decoded != null) {
-			field.addCodeComment("b64: " + decoded);
+		if (result != null) {
+			field.addCodeComment(result.commentText());
 			return true;
 		}
 		return false;

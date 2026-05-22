@@ -70,7 +70,7 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 		// Arrays where ≥1 string passed normal detect() — required anchor for contextual decoding
 		Set<InsnNode> arrayAnchors = null;
 		// All valid-B64+UTF-8 strings in arrays (superset of anchors; used for the final comment)
-		Map<InsnNode, TreeMap<Integer, String>> arrayCandidates = null;
+		Map<InsnNode, TreeMap<Integer, B64Result>> arrayCandidates = null;
 
 		for (BlockNode block : blocks) {
 			for (InsnNode insn : block.getInstructions()) {
@@ -83,7 +83,7 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 				// If the string is an arg to an explicit Base64.decode call, decode unconditionally.
 				// The call itself is strong evidence of intent — skip false-positive heuristics.
 				boolean forced = isUsedAsBase64DecodeArg(csn);
-				String decoded = forced
+				B64Result decoded = forced
 						? B64Detector.decodeForced(str, options.getMaxCommentLength())
 						: B64Detector.detect(str, options);
 
@@ -97,7 +97,7 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 						continue;
 					}
 					// Determine the best available decoded value for this slot
-					String candidate = decoded != null ? decoded
+					B64Result candidate = decoded != null ? decoded
 							: B64Detector.decodeIfValid(str, options.getMaxCommentLength());
 					if (candidate == null) {
 						continue;
@@ -131,7 +131,7 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 				if (fieldConstants.contains(str)) {
 					continue;
 				}
-				csn.addAttr(AType.CODE_COMMENTS, new CodeComment("b64: " + decoded, CommentStyle.LINE));
+				csn.addAttr(AType.CODE_COMMENTS, new CodeComment(decoded.commentText(), CommentStyle.LINE));
 			}
 		}
 
@@ -175,11 +175,11 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 		return -1;
 	}
 
-	private static String buildArrayComment(TreeMap<Integer, String> decodings) {
+	private static String buildArrayComment(TreeMap<Integer, B64Result> decodings) {
 		StringBuilder sb = new StringBuilder();
-		for (Map.Entry<Integer, String> e : decodings.entrySet()) {
+		for (Map.Entry<Integer, B64Result> e : decodings.entrySet()) {
 			sb.append('\n');
-			sb.append("b64[").append(e.getKey()).append("]: ").append(e.getValue());
+			sb.append(e.getValue().indexedCommentText(e.getKey()));
 		}
 		return sb.toString();
 	}

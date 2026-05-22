@@ -215,15 +215,15 @@ class JadxStringDecoderPluginTest {
 		// Both the String CONSTANT_VALUE field and the byte[] result field should be annotated
 		String code = decompileSmali("b64/multiline_field_b64.smali");
 		System.out.println(code);
-		assertThat(code).contains("b64: Hello, World!");
+		assertThat(code).contains("b64(mime): Hello, World!");
 	}
 
 	@Test
 	public void pemB64FieldTest() throws Exception {
-		// PEM Base64 String CONSTANT_VALUE + byte[] field via Base64.decode — both should get b64: comment
+		// PEM Base64 String CONSTANT_VALUE + byte[] field via Base64.decode — both should get b64(mime): comment
 		String code = decompileSmali("b64/pem_b64_field.smali");
 		System.out.println(code);
-		assertThat(code).contains("b64:");
+		assertThat(code).contains("b64(mime):");
 	}
 
 	@Test
@@ -272,7 +272,7 @@ class JadxStringDecoderPluginTest {
 		// "SGVsbG9-" is URL-safe Base64 for "Hello~" — '-' maps to index 62 (standard '+')
 		String code = decompileSmali("b64/urlsafe_b64.smali");
 		System.out.println(code);
-		assertThat(code).contains("b64: Hello~");
+		assertThat(code).contains("b64(url): Hello~");
 	}
 
 	@Test
