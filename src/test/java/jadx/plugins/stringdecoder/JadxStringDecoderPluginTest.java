@@ -184,25 +184,6 @@ class JadxStringDecoderPluginTest {
 	}
 
 	@Test
-	public void skipIdentifiersFiltersIdentifierLikeTest() throws Exception {
-		// "fillItem" looks like a Java identifier; with skipIdentifiers=true it must not be flagged
-		// (printable threshold lowered so only the identifier check is responsible for filtering)
-		String code = decompileSmali("b64/identifier_like_b64.smali",
-				Map.of(opt("skipIdentifiers"), "yes", opt("minPrintablePercent"), "75"));
-		System.out.println(code);
-		assertThat(code).doesNotContain("b64:");
-	}
-
-	@Test
-	public void skipIdentifiersAllowsPaddedStringTest() throws Exception {
-		// "aGVsbG8=" contains '=' so it is NOT identifier-like; skipIdentifiers=true must not suppress it
-		String code = decompileSmali("b64/b64_decodable.smali",
-				Map.of(opt("skipIdentifiers"), "yes"));
-		System.out.println(code);
-		assertThat(code).contains("b64: hello");
-	}
-
-	@Test
 	public void minDecodedLengthFiltersShortDecodeTest() throws Exception {
 		// "aGVsbG8=" decodes to "hello" (5 chars); minDecodedLength=10 must suppress it
 		String code = decompileSmali("b64/b64_decodable.smali",
@@ -243,6 +224,39 @@ class JadxStringDecoderPluginTest {
 		String code = decompileSmali("b64/pem_b64_field.smali");
 		System.out.println(code);
 		assertThat(code).contains("b64:");
+	}
+
+	@Test
+	public void antifridas8kTest() throws Exception {
+		// Real-world anti-frida/xposed detection class (s8.k) with filled-new-array/range.
+		// All 9 strings in the array should get indexed comments. Padded strings (frida,
+		// libAndHook, liblsposed) anchor contextual decoding of the unpadded siblings that
+		// would otherwise be filtered by skipIdentifiers or requirePadding. Index 2 ("Z3Vt")
+		// is below minInputLength=8 individually, but the array context includes it too.
+		String code = decompileSmali("b64/antifrida_s8k.smali");
+		System.out.println(code);
+		assertThat(code).contains("b64[0]: xposed");
+		assertThat(code).contains("b64[1]: frida");
+		assertThat(code).contains("b64[2]: gum");
+		assertThat(code).contains("b64[3]: linjector");
+		assertThat(code).contains("b64[4]: magisk");
+		assertThat(code).contains("b64[5]: substrate");
+		assertThat(code).contains("b64[6]: gdbserver");
+		assertThat(code).contains("b64[7]: libAndHook");
+		assertThat(code).contains("b64[8]: liblsposed");
+	}
+
+	@Test
+	public void filledArrayB64Test() throws Exception {
+		// String[] initialised with two B64 strings via filled-new-array.
+		// Both decoded values should appear as indexed comments on the array instruction.
+		String code = decompileSmali("b64/filled_array_b64.smali");
+		System.out.println(code);
+		assertThat(code).contains("b64[0]: Hello, World!");
+		assertThat(code).contains("b64[1]: hello");
+		assertThat(code).contains("b64[2]: foobar");
+		assertThat(code).contains("b64[3]: base64");
+		assertThat(code).contains("b64[4]: testing");
 	}
 
 	@Test

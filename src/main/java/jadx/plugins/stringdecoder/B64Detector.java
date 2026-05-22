@@ -13,9 +13,7 @@ public final class B64Detector {
 	// Allow embedded \n/\r (PEM/MIME line-wrapped Base64); = padding and trailing newline are optional
 	private static final Pattern BASE64_STANDARD = Pattern.compile("^[A-Za-z0-9+/\\n\\r]*=*[\\n\\r]*$");
 	private static final Pattern BASE64_URL_SAFE = Pattern.compile("^[A-Za-z0-9_\\-\\n\\r]*=*[\\n\\r]*$");
-	private static final Pattern IDENTIFIER_LIKE = Pattern.compile("^[A-Za-z][A-Za-z0-9]*$");
-
-	private B64Detector() {
+private B64Detector() {
 	}
 
 	/**
@@ -27,9 +25,6 @@ public final class B64Detector {
 			return null;
 		}
 		if (options.isRequirePadding() && !str.endsWith("=")) {
-			return null;
-		}
-		if (options.isSkipIdentifiers() && IDENTIFIER_LIKE.matcher(str).matches()) {
 			return null;
 		}
 		if (!BASE64_STANDARD.matcher(str).matches() && !BASE64_URL_SAFE.matcher(str).matches()) {
@@ -107,6 +102,30 @@ public final class B64Detector {
 				.filter(Character::isLetterOrDigit)
 				.count();
 		return (double) alnumCount / str.length() >= minRatio;
+	}
+
+	/**
+	 * Returns the decoded string if {@code str} is valid Base64 that decodes to valid UTF-8,
+	 * without applying heuristic filters (no length, printable-ratio, or alphanumeric-ratio checks).
+	 * Used for array-element candidates when at least one sibling passes normal detection.
+	 * Returns null if the charset check fails, Base64 decode throws, or the result is not valid UTF-8.
+	 */
+	public static String decodeIfValid(String str, int maxCommentLength) {
+		if (!BASE64_STANDARD.matcher(str).matches() && !BASE64_URL_SAFE.matcher(str).matches()) {
+			return null;
+		}
+		for (Base64.Decoder decoder : new Base64.Decoder[] { Base64.getDecoder(), Base64.getUrlDecoder() }) {
+			try {
+				byte[] bytes = decoder.decode(str);
+				CharsetDecoder utf8 = StandardCharsets.UTF_8.newDecoder()
+						.onMalformedInput(CodingErrorAction.REPORT)
+						.onUnmappableCharacter(CodingErrorAction.REPORT);
+				String decoded = utf8.decode(ByteBuffer.wrap(bytes)).toString();
+				return truncate(decoded, maxCommentLength);
+			} catch (Exception ignored) {
+			}
+		}
+		return null;
 	}
 
 	/**

@@ -12,7 +12,6 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 	private int minPrintablePercent;
 	private int minAlphanumericPercent;
 	private boolean requirePadding;
-	private boolean skipIdentifiers;
 
 	@Override
 	public void registerOptions() {
@@ -44,10 +43,6 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 				.description("Only flag strings that end with '=' padding; reduces false positives from identifiers and short words")
 				.defaultValue(false)
 				.setter(v -> requirePadding = v);
-		boolOption(JadxStringDecoderPlugin.PLUGIN_ID + ".skipIdentifiers")
-				.description("Skip strings that look like Java identifiers (letters/digits only, starts with a letter); avoids flagging symbol names")
-				.defaultValue(false)
-				.setter(v -> skipIdentifiers = v);
 		intOption(JadxStringDecoderPlugin.PLUGIN_ID + ".minDecodedLength")
 				.description("Minimum decoded string length to add a comment (0 = disabled); rejects very short decoded outputs")
 				.defaultValue(0)
@@ -80,10 +75,6 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 
 	public boolean isRequirePadding() {
 		return requirePadding;
-	}
-
-	public boolean isSkipIdentifiers() {
-		return skipIdentifiers;
 	}
 
 	public int getMinDecodedLength() {
