@@ -89,10 +89,10 @@ public class JadxStringDecoderPlugin implements JadxPlugin {
 				if (panel == null) {
 					List<OptionDescription> allOpts = options.getOptionsDescriptions();
 					List<OptionDescription> b64Opts = allOpts.stream()
-							.filter(o -> !o.name().contains("ByteArray"))
+							.filter(o -> !o.name().toLowerCase().contains("bytearray"))
 							.collect(Collectors.toList());
 					List<OptionDescription> byteArrayOpts = allOpts.stream()
-							.filter(o -> o.name().contains("ByteArray"))
+							.filter(o -> o.name().toLowerCase().contains("bytearray"))
 							.collect(Collectors.toList());
 
 					panel = new JPanel();

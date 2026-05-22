@@ -98,7 +98,7 @@ public class ByteArrayStringPass implements JadxDecompilePass {
 			long printableCount = decoded.chars()
 					.filter(c -> (c >= 32 && c <= 126) || c == '\t' || c == '\n' || c == '\r')
 					.count();
-			if ((double) printableCount / decoded.length() < options.getMinPrintableRatio()) {
+			if ((double) printableCount / decoded.length() < options.getByteArrayMinPrintableRatio()) {
 				return null;
 			}
 			int minDecoded = options.getMinDecodedLength();

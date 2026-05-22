@@ -6,6 +6,7 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 
 	private boolean enable;
 	private boolean enableByteArrayStringPass;
+	private int byteArrayMinPrintablePercent;
 	private int minInputLength;
 	private int minDecodedLength;
 	private int maxCommentLength;
@@ -24,6 +25,10 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 				.description("Enable byte[] field string detection pass")
 				.defaultValue(true)
 				.setter(v -> enableByteArrayStringPass = v);
+		intOption(JadxStringDecoderPlugin.PLUGIN_ID + ".byteArrayMinPrintablePercent")
+				.description("Minimum percentage of printable ASCII chars in a byte[] field for it to be annotated (0-100)")
+				.defaultValue(20)
+				.setter(v -> byteArrayMinPrintablePercent = v);
 		intOption(JadxStringDecoderPlugin.PLUGIN_ID + ".minInputLength")
 				.description("Minimum length of an encoded string to be considered for decoding")
 				.defaultValue(8)
@@ -60,6 +65,10 @@ public class B64DeobfuscateOptions extends BasePluginOptionsBuilder {
 
 	public boolean isEnableByteArrayStringPass() {
 		return enableByteArrayStringPass;
+	}
+
+	public double getByteArrayMinPrintableRatio() {
+		return byteArrayMinPrintablePercent / 100.0;
 	}
 
 	public int getMinInputLength() {
