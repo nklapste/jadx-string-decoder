@@ -93,29 +93,30 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 				FilledNewArrayNode arrayParent = findFilledNewArrayParent(csn);
 				if (arrayParent != null) {
 					int idx = argIndexOf(arrayParent, csn.getResult().getSVar());
-					if (idx >= 0) {
-						// Determine the best available decoded value for this slot
-						String candidate = decoded != null ? decoded
-								: B64Detector.decodeIfValid(str, options.getMaxCommentLength());
-						if (candidate != null) {
-							if (fieldConstants == null) {
-								fieldConstants = collectConstantValueFieldStrings(mth.getParentClass());
-							}
-							if (!fieldConstants.contains(str)) {
-								if (arrayCandidates == null) {
-									arrayCandidates = new LinkedHashMap<>();
-								}
-								arrayCandidates.computeIfAbsent(arrayParent, k -> new TreeMap<>()).put(idx, candidate);
-								if (decoded != null) {
-									if (arrayAnchors == null) {
-										arrayAnchors = new LinkedHashSet<>();
-									}
-									arrayAnchors.add(arrayParent);
-								}
-							}
-						}
+					if (idx < 0) {
 						continue;
 					}
+					// Determine the best available decoded value for this slot
+					String candidate = decoded != null ? decoded
+							: B64Detector.decodeIfValid(str, options.getMaxCommentLength());
+					if (candidate != null) {
+						if (fieldConstants == null) {
+							fieldConstants = collectConstantValueFieldStrings(mth.getParentClass());
+						}
+						if (!fieldConstants.contains(str)) {
+							if (arrayCandidates == null) {
+								arrayCandidates = new LinkedHashMap<>();
+							}
+							arrayCandidates.computeIfAbsent(arrayParent, k -> new TreeMap<>()).put(idx, candidate);
+							if (decoded != null) {
+								if (arrayAnchors == null) {
+									arrayAnchors = new LinkedHashSet<>();
+								}
+								arrayAnchors.add(arrayParent);
+							}
+						}
+					}
+					continue;
 				}
 
 				if (decoded == null) {
@@ -172,12 +173,6 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 		return -1;
 	}
 
-	/**
-	 * Builds a multi-line comment text for all decoded strings in a FilledNewArrayNode.
-	 * Each entry is formatted as "b64[N]: decoded" on its own line, sorted by index.
-	 * The renderer (appendMultiLineString) splits on \n and starts each continuation
-	 * line with "// ", producing one "// b64[N]: ..." line per decoded string.
-	 */
 	private static String buildArrayComment(TreeMap<Integer, String> decodings) {
 		StringBuilder sb = new StringBuilder();
 		for (Map.Entry<Integer, String> e : decodings.entrySet()) {

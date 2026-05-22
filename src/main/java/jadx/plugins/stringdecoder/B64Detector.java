@@ -13,7 +13,10 @@ public final class B64Detector {
 	// Allow embedded \n/\r (PEM/MIME line-wrapped Base64); = padding and trailing newline are optional
 	private static final Pattern BASE64_STANDARD = Pattern.compile("^[A-Za-z0-9+/\\n\\r]*=*[\\n\\r]*$");
 	private static final Pattern BASE64_URL_SAFE = Pattern.compile("^[A-Za-z0-9_\\-\\n\\r]*=*[\\n\\r]*$");
-private B64Detector() {
+	private static final Base64.Decoder[] STANDARD_AND_URL = { Base64.getDecoder(), Base64.getUrlDecoder() };
+	private static final Base64.Decoder[] ALL_DECODERS = { Base64.getDecoder(), Base64.getUrlDecoder(), Base64.getMimeDecoder() };
+
+	private B64Detector() {
 	}
 
 	/**
@@ -117,7 +120,7 @@ private B64Detector() {
 		if (!BASE64_STANDARD.matcher(str).matches() && !BASE64_URL_SAFE.matcher(str).matches()) {
 			return null;
 		}
-		for (Base64.Decoder decoder : new Base64.Decoder[] { Base64.getDecoder(), Base64.getUrlDecoder() }) {
+		for (Base64.Decoder decoder : STANDARD_AND_URL) {
 			try {
 				byte[] bytes = decoder.decode(str);
 				CharsetDecoder utf8 = StandardCharsets.UTF_8.newDecoder()
@@ -138,7 +141,7 @@ private B64Detector() {
 	 * Invalid UTF-8 bytes are replaced rather than causing a rejection.
 	 */
 	public static String decodeForced(String str, int maxCommentLength) {
-		for (Base64.Decoder decoder : new Base64.Decoder[]{Base64.getDecoder(), Base64.getUrlDecoder(), Base64.getMimeDecoder()}) {
+		for (Base64.Decoder decoder : ALL_DECODERS) {
 			try {
 				byte[] bytes = decoder.decode(str);
 				CharsetDecoder utf8 = StandardCharsets.UTF_8.newDecoder()
