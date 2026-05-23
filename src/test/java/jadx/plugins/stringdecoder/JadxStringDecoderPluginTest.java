@@ -30,6 +30,15 @@ class JadxStringDecoderPluginTest {
 	}
 
 	@Test
+	public void emptyStringB64ArgTest() throws Exception {
+		// Empty string passed to Base64.decode — decodes to zero bytes, no comment should appear.
+		// Regression: decodeForced("") previously produced "// b64: " (empty decoded value).
+		String code = decompileSmali("b64/empty_string_b64_arg.smali");
+		System.out.println(code);
+		assertThat(code).doesNotContain("b64:");
+	}
+
+	@Test
 	public void looksLikeB64Test() throws Exception {
 		// "AQIDBAUG" matches the Base64 charset but decodes to binary [1,2,3,4,5,6] — not printable UTF-8, no comment expected
 		String code = decompileSmali("b64/looks_like_b64.smali");

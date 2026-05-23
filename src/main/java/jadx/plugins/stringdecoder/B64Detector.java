@@ -166,6 +166,9 @@ public final class B64Detector {
 		for (int i = 0; i < ALL_DECODERS.length; i++) {
 			try {
 				byte[] bytes = ALL_DECODERS[i].decode(str);
+				if (bytes.length == 0) {
+					return null;
+				}
 				CharsetDecoder utf8 = StandardCharsets.UTF_8.newDecoder()
 						.onMalformedInput(CodingErrorAction.REPLACE)
 						.onUnmappableCharacter(CodingErrorAction.REPLACE);
