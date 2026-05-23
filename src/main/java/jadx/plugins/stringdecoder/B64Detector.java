@@ -60,13 +60,11 @@ public final class B64Detector {
 	}
 
 	private static B64Result tryDecode(String str, B64DeobfuscateOptions options) {
-		B64Result result = attemptDecode(Base64.getDecoder(), str, options, "");
-		if (result != null) {
-			return result;
-		}
-		result = attemptDecode(Base64.getUrlDecoder(), str, options, "url");
-		if (result != null) {
-			return result;
+		for (int i = 0; i < STANDARD_AND_URL.length; i++) {
+			B64Result result = attemptDecode(STANDARD_AND_URL[i], str, options, STANDARD_AND_URL_TAGS[i]);
+			if (result != null) {
+				return result;
+			}
 		}
 		// MIME decoder ignores embedded whitespace (PEM line-wrapped Base64)
 		if (str.indexOf('\n') >= 0 || str.indexOf('\r') >= 0) {
@@ -137,13 +135,15 @@ public final class B64Detector {
 		if (!BASE64_STANDARD.matcher(str).matches() && !BASE64_URL_SAFE.matcher(str).matches()) {
 			return null;
 		}
-		Base64.Decoder[] decoders = (str.indexOf('\n') >= 0 || str.indexOf('\r') >= 0)
-				? ALL_DECODERS : STANDARD_AND_URL;
-		String[] tags = (str.indexOf('\n') >= 0 || str.indexOf('\r') >= 0)
-				? ALL_DECODER_TAGS : STANDARD_AND_URL_TAGS;
+		boolean hasLineBreaks = str.indexOf('\n') >= 0 || str.indexOf('\r') >= 0;
+		Base64.Decoder[] decoders = hasLineBreaks ? ALL_DECODERS : STANDARD_AND_URL;
+		String[] tags = hasLineBreaks ? ALL_DECODER_TAGS : STANDARD_AND_URL_TAGS;
 		for (int i = 0; i < decoders.length; i++) {
 			try {
 				byte[] bytes = decoders[i].decode(str);
+				if (bytes.length == 0) {
+					return null;
+				}
 				CharsetDecoder utf8 = StandardCharsets.UTF_8.newDecoder()
 						.onMalformedInput(CodingErrorAction.REPORT)
 						.onUnmappableCharacter(CodingErrorAction.REPORT);
