@@ -60,14 +60,10 @@ public class ByteArrayStringPass implements JadxDecompilePass {
 		}
 		FilledNewArrayNode filledArr = (FilledNewArrayNode) insn;
 		ArgType elemType = filledArr.getElemType();
-		byte[] bytes;
-		if (ArgType.BYTE.equals(elemType)) {
-			bytes = extractLiteralBytes(filledArr);
-		} else if (ArgType.INT.equals(elemType)) {
-			bytes = extractIntAsAsciiBytes(filledArr);
-		} else {
+		if (!ArgType.BYTE.equals(elemType) && !ArgType.INT.equals(elemType)) {
 			return;
 		}
+		byte[] bytes = extractLiteralBytes(filledArr);
 		if (bytes == null || bytes.length == 0) {
 			return;
 		}
@@ -78,19 +74,6 @@ public class ByteArrayStringPass implements JadxDecompilePass {
 	}
 
 	private static byte[] extractLiteralBytes(FilledNewArrayNode insn) {
-		int count = insn.getArgsCount();
-		byte[] bytes = new byte[count];
-		for (int i = 0; i < count; i++) {
-			InsnArg arg = insn.getArg(i);
-			if (!(arg instanceof LiteralArg)) {
-				return null;
-			}
-			bytes[i] = (byte) ((LiteralArg) arg).getLiteral();
-		}
-		return bytes;
-	}
-
-	private static byte[] extractIntAsAsciiBytes(FilledNewArrayNode insn) {
 		int count = insn.getArgsCount();
 		byte[] bytes = new byte[count];
 		for (int i = 0; i < count; i++) {
@@ -113,13 +96,7 @@ public class ByteArrayStringPass implements JadxDecompilePass {
 					.onMalformedInput(CodingErrorAction.REPORT)
 					.onUnmappableCharacter(CodingErrorAction.REPORT);
 			String decoded = utf8.decode(ByteBuffer.wrap(bytes)).toString();
-			if (decoded.isEmpty()) {
-				return null;
-			}
-			long printableCount = decoded.chars()
-					.filter(c -> (c >= 32 && c <= 126) || c == '\t' || c == '\n' || c == '\r')
-					.count();
-			if ((double) printableCount / decoded.length() < options.getByteArrayMinPrintableRatio()) {
+			if (!B64Detector.isPrintable(decoded, options.getByteArrayMinPrintableRatio())) {
 				return null;
 			}
 			int minDecoded = options.getMinDecodedLength();

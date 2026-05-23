@@ -60,15 +60,14 @@ public final class B64Detector {
 	}
 
 	private static B64Result tryDecode(String str, B64DeobfuscateOptions options) {
-		for (int i = 0; i < STANDARD_AND_URL.length; i++) {
-			B64Result result = attemptDecode(STANDARD_AND_URL[i], str, options, STANDARD_AND_URL_TAGS[i]);
+		boolean hasLineBreaks = str.indexOf('\n') >= 0 || str.indexOf('\r') >= 0;
+		Base64.Decoder[] decoders = hasLineBreaks ? ALL_DECODERS : STANDARD_AND_URL;
+		String[] tags = hasLineBreaks ? ALL_DECODER_TAGS : STANDARD_AND_URL_TAGS;
+		for (int i = 0; i < decoders.length; i++) {
+			B64Result result = attemptDecode(decoders[i], str, options, tags[i]);
 			if (result != null) {
 				return result;
 			}
-		}
-		// MIME decoder ignores embedded whitespace (PEM line-wrapped Base64)
-		if (str.indexOf('\n') >= 0 || str.indexOf('\r') >= 0) {
-			return attemptDecode(Base64.getMimeDecoder(), str, options, "mime");
 		}
 		return null;
 	}
@@ -101,7 +100,7 @@ public final class B64Detector {
 
 	// Counts printable ASCII (32-126) plus common whitespace (\t, \n, \r) as printable.
 	// Non-ASCII Unicode chars (e.g. Hebrew letters from garbage decodes) do not count.
-	private static boolean isPrintable(String str, double minRatio) {
+	static boolean isPrintable(String str, double minRatio) {
 		if (str.isEmpty()) {
 			return false;
 		}
