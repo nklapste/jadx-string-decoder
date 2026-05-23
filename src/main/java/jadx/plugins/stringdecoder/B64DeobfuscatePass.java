@@ -20,6 +20,7 @@ import jadx.core.codegen.utils.CodeComment;
 import jadx.core.dex.attributes.AType;
 import jadx.core.dex.instructions.ConstStringNode;
 import jadx.core.dex.instructions.FilledNewArrayNode;
+import jadx.core.dex.instructions.InvokeNode;
 import jadx.core.dex.instructions.args.InsnArg;
 import jadx.core.dex.instructions.args.RegisterArg;
 import jadx.core.dex.instructions.args.SSAVar;
@@ -135,7 +136,13 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 				if (fieldConstants.contains(str)) {
 					continue;
 				}
-				csn.addAttr(AType.CODE_COMMENTS, new CodeComment(decoded.commentText(), CommentStyle.LINE));
+				// Attach to the top-level statement rather than the ConstStringNode so that
+				// comments from multiple decoded strings in one expression all survive.
+				// inheritMetadata uses the untyped addAttr (map.put = replace), so comments
+				// riding up through inlining chains overwrite each other; attaching directly
+				// to the statement uses the typed addAttr (list.add = merge) and bypasses that.
+				InsnNode stmtInsn = findStatementInsn(csn);
+				stmtInsn.addAttr(AType.CODE_COMMENTS, new CodeComment(decoded.commentText(), CommentStyle.LINE));
 			}
 		}
 
@@ -147,6 +154,86 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 				arrayInsn.addAttr(AType.CODE_COMMENTS, new CodeComment(comment, CommentStyle.LINE));
 			}
 		}
+	}
+
+	/**
+	 * Walks the SSA def-use chain from {@code csn} upward to find the top-level statement
+	 * instruction (the one that is not itself consumed by another instruction).
+	 * Attaching CODE_COMMENTS there — using the typed, list-merging addAttr — avoids the
+	 * replace-on-copy problem in inheritMetadata when multiple decoded strings live in the
+	 * same chained expression.
+	 */
+	private static InsnNode findStatementInsn(ConstStringNode csn) {
+		RegisterArg result = csn.getResult();
+		if (result == null) {
+			return csn;
+		}
+		SSAVar var = result.getSVar();
+		if (var == null) {
+			return csn;
+		}
+		InsnNode current = csn;
+		for (int depth = 0; depth < 16; depth++) {
+			List<RegisterArg> uses = var.getUseList();
+			if (uses.size() != 1) {
+				break;
+			}
+			InsnNode useInsn = uses.get(0).getParentInsn();
+			if (useInsn == null) {
+				break;
+			}
+			RegisterArg useResult = useInsn.getResult();
+			if (useResult == null) {
+				// Constructor call (invoke-direct on <init>): the constructed object flows through
+				// arg[0] rather than a result register — pivot to its SSAVar and continue tracing.
+				if (useInsn instanceof InvokeNode && ((InvokeNode) useInsn).getCallMth().isConstructor()) {
+					InsnArg arg0 = useInsn.getArg(0);
+					if (arg0 instanceof RegisterArg) {
+						SSAVar ctorVar = ((RegisterArg) arg0).getSVar();
+						if (ctorVar != null) {
+							InsnNode postCtorUser = singlePostCtorUser(ctorVar, useInsn);
+							if (postCtorUser != null) {
+								RegisterArg postResult = postCtorUser.getResult();
+								if (postResult == null) {
+									return postCtorUser;
+								}
+								SSAVar postVar = postResult.getSVar();
+								if (postVar == null || postVar.getUseList().isEmpty()) {
+									return postCtorUser;
+								}
+								current = postCtorUser;
+								var = postVar;
+								continue;
+							}
+						}
+					}
+				}
+				return useInsn;
+			}
+			SSAVar useVar = useResult.getSVar();
+			if (useVar == null || useVar.getUseList().isEmpty()) {
+				return useInsn;
+			}
+			current = useInsn;
+			var = useVar;
+		}
+		return current;
+	}
+
+	/** Returns the single use of {@code ctorVar} that is not the constructor call itself, or null. */
+	private static InsnNode singlePostCtorUser(SSAVar ctorVar, InsnNode ctorInsn) {
+		InsnNode found = null;
+		for (RegisterArg use : ctorVar.getUseList()) {
+			InsnNode parent = use.getParentInsn();
+			if (parent == null || parent == ctorInsn) {
+				continue;
+			}
+			if (found != null) {
+				return null;
+			}
+			found = parent;
+		}
+		return found;
 	}
 
 	/** Returns the FilledNewArrayNode that directly uses the result of {@code csn}, or null. */

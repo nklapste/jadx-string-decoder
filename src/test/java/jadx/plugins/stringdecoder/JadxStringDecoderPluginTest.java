@@ -362,6 +362,18 @@ class JadxStringDecoderPluginTest {
 	}
 
 	@Test
+	public void multiB64InvokeChainTest() throws Exception {
+		// Two const-strings both used as direct Base64.decode args in the same method chain:
+		//   Class.forName(new String(Base64.decode("...", 0)))
+		//       .getMethod(new String(Base64.decode("...", 0)), ...)
+		// Both should get b64: comments — bug: only the first was annotated
+		String code = decompileSmali("b64/multi_b64_invoke.smali");
+		System.out.println(code);
+		assertThat(code).contains("b64: android.app.ActivityThread");
+		assertThat(code).contains("b64: getPackageManager");
+	}
+
+	@Test
 	public void byteArrayStringPassDisabledTest() throws Exception {
 		// with enableByteArrayStringPass=false the bytes: comment must not appear
 		String code = decompileSmali("bytes/byte_array_string.smali",
