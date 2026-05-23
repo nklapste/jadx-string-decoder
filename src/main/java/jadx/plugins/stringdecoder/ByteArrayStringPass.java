@@ -46,7 +46,7 @@ public class ByteArrayStringPass implements JadxDecompilePass {
 		for (FieldNode field : cls.getFields()) {
 			processField(field);
 		}
-		return false;
+		return true;
 	}
 
 	private void processField(FieldNode field) {
@@ -59,10 +59,15 @@ public class ByteArrayStringPass implements JadxDecompilePass {
 			return;
 		}
 		FilledNewArrayNode filledArr = (FilledNewArrayNode) insn;
-		if (!ArgType.BYTE.equals(filledArr.getElemType())) {
+		ArgType elemType = filledArr.getElemType();
+		byte[] bytes;
+		if (ArgType.BYTE.equals(elemType)) {
+			bytes = extractLiteralBytes(filledArr);
+		} else if (ArgType.INT.equals(elemType)) {
+			bytes = extractIntAsAsciiBytes(filledArr);
+		} else {
 			return;
 		}
-		byte[] bytes = extractLiteralBytes(filledArr);
 		if (bytes == null || bytes.length == 0) {
 			return;
 		}
@@ -78,10 +83,26 @@ public class ByteArrayStringPass implements JadxDecompilePass {
 		for (int i = 0; i < count; i++) {
 			InsnArg arg = insn.getArg(i);
 			if (!(arg instanceof LiteralArg)) {
-				// Non-literal arg (e.g. SGET to a named constant) — skip this array
 				return null;
 			}
 			bytes[i] = (byte) ((LiteralArg) arg).getLiteral();
+		}
+		return bytes;
+	}
+
+	private static byte[] extractIntAsAsciiBytes(FilledNewArrayNode insn) {
+		int count = insn.getArgsCount();
+		byte[] bytes = new byte[count];
+		for (int i = 0; i < count; i++) {
+			InsnArg arg = insn.getArg(i);
+			if (!(arg instanceof LiteralArg)) {
+				return null;
+			}
+			long val = ((LiteralArg) arg).getLiteral();
+			if (val < 0 || val > 255) {
+				return null;
+			}
+			bytes[i] = (byte) val;
 		}
 		return bytes;
 	}

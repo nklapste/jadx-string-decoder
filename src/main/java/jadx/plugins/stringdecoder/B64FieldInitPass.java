@@ -50,7 +50,7 @@ public class B64FieldInitPass implements JadxDecompilePass {
 		for (FieldNode field : cls.getFields()) {
 			processField(field);
 		}
-		return false;
+		return true;
 	}
 
 	private void processField(FieldNode field) {

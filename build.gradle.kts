@@ -42,6 +42,10 @@ java {
     targetCompatibility = JavaVersion.VERSION_11
 }
 
+tasks.withType<JavaCompile> {
+    options.encoding = "UTF-8"
+}
+
 version = System.getenv("VERSION") ?: "dev"
 
 tasks {

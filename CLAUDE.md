@@ -26,7 +26,7 @@ JadxStringDecoderPlugin.init()
   → registers B64DeobfuscateOptions
   → registers B64DeobfuscatePass  (method-body Base64 string detection)
   → registers B64FieldInitPass    (field initializer Base64 detection)
-  → registers ByteArrayStringPass (byte[] field string detection)
+  → registers ByteArrayStringPass (byte[]/int[] field string detection)
 ```
 
 All three passes are skipped when `enable` is false.
@@ -49,7 +49,7 @@ Comments are added via `field.addCodeComment()` which renders on a separate line
 
 **`ByteArrayStringPass`** — runs `.after("ExtractFieldInit")`
 
-Looks for `byte[]` fields initialised with a `FilledNewArrayNode` of all literal bytes. If the bytes decode as valid UTF-8 with sufficient printable characters, adds a `bytes: "..."` comment on the field.
+Looks for `byte[]` and `int[]` fields initialised with a `FilledNewArrayNode` of all literal values. For `int[]`, any element outside `[0, 255]` (e.g. a `-1` sentinel in a decode table) causes the whole array to be skipped. The elements are then treated as bytes, decoded as UTF-8, and if the result is sufficiently printable a `bytes: "..."` comment is added on the field. `visit(ClassNode)` returns `true` so `DepthTraversal` recurses into inner classes.
 
 ### Detection logic (`B64Detector`)
 
