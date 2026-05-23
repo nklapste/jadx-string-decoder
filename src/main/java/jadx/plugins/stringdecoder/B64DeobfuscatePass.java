@@ -1,5 +1,6 @@
 package jadx.plugins.stringdecoder;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -68,6 +69,8 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 		}
 		// Lazily built on the first B64 hit — avoids field scan for methods with no B64 strings
 		Set<String> fieldConstants = null;
+		// Decoded strings grouped by their top-level statement instruction (insertion = source order)
+		Map<InsnNode, List<B64Result>> stmtCandidates = null;
 		// Arrays where ≥1 string passed normal detect() — required anchor for contextual decoding
 		Set<InsnNode> arrayAnchors = null;
 		// All valid-B64+UTF-8 strings in arrays (superset of anchors; used for the final comment)
@@ -136,13 +139,20 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 				if (fieldConstants.contains(str)) {
 					continue;
 				}
-				// Attach to the top-level statement rather than the ConstStringNode so that
-				// comments from multiple decoded strings in one expression all survive.
-				// inheritMetadata uses the untyped addAttr (map.put = replace), so comments
-				// riding up through inlining chains overwrite each other; attaching directly
-				// to the statement uses the typed addAttr (list.add = merge) and bypasses that.
-				InsnNode stmtInsn = findStatementInsn(csn);
-				stmtInsn.addAttr(AType.CODE_COMMENTS, new CodeComment(decoded.commentText(), CommentStyle.LINE));
+				if (stmtCandidates == null) {
+					stmtCandidates = new LinkedHashMap<>();
+				}
+				stmtCandidates.computeIfAbsent(findStatementInsn(csn), k -> new ArrayList<>()).add(decoded);
+			}
+		}
+
+		if (stmtCandidates != null) {
+			for (Map.Entry<InsnNode, List<B64Result>> e : stmtCandidates.entrySet()) {
+				List<B64Result> results = e.getValue();
+				String comment = results.size() == 1
+						? results.get(0).commentText()
+						: buildChainComment(results);
+				e.getKey().addAttr(AType.CODE_COMMENTS, new CodeComment(comment, CommentStyle.LINE));
 			}
 		}
 
@@ -264,6 +274,15 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 			}
 		}
 		return -1;
+	}
+
+	private static String buildChainComment(List<B64Result> results) {
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < results.size(); i++) {
+			sb.append('\n');
+			sb.append(results.get(i).indexedCommentText(i));
+		}
+		return sb.toString();
 	}
 
 	private static String buildArrayComment(TreeMap<Integer, B64Result> decodings) {

@@ -366,11 +366,11 @@ class JadxStringDecoderPluginTest {
 		// Two const-strings both used as direct Base64.decode args in the same method chain:
 		//   Class.forName(new String(Base64.decode("...", 0)))
 		//       .getMethod(new String(Base64.decode("...", 0)), ...)
-		// Both should get b64: comments — bug: only the first was annotated
+		// Both should get indexed b64 comments in left-to-right source order
 		String code = decompileSmali("b64/multi_b64_invoke.smali");
 		System.out.println(code);
-		assertThat(code).contains("b64: android.app.ActivityThread");
-		assertThat(code).contains("b64: getPackageManager");
+		assertThat(code).contains("b64[0]: android.app.ActivityThread");
+		assertThat(code).contains("b64[1]: getPackageManager");
 	}
 
 	@Test
