@@ -286,12 +286,7 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 	}
 
 	private static String buildArrayComment(TreeMap<Integer, B64Result> decodings) {
-		StringBuilder sb = new StringBuilder();
-		for (Map.Entry<Integer, B64Result> e : decodings.entrySet()) {
-			sb.append('\n');
-			sb.append(e.getValue().indexedCommentText(e.getKey()));
-		}
-		return sb.toString();
+		return B64Result.buildIndexedComment(decodings);
 	}
 
 	/**

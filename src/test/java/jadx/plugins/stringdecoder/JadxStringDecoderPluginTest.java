@@ -296,6 +296,19 @@ class JadxStringDecoderPluginTest {
 	}
 
 	@Test
+	public void stringArrayFieldIndexedB64Test() throws Exception {
+		// String[] field initialised via new-array + aput-object (large-array path).
+		// B64FieldInitPass.findAndAnnotateFilledArray should produce indexed comments
+		// for the two B64 elements; plain strings at indices 0 and 2 must not appear.
+		String code = decompileSmali("b64/string_array_field_b64.smali");
+		System.out.println(code);
+		assertThat(code).contains("b64[1]: Hello, World!");
+		assertThat(code).contains("b64[3]: hello");
+		assertThat(code).doesNotContain("b64[0]:");
+		assertThat(code).doesNotContain("b64[2]:");
+	}
+
+	@Test
 	public void falsePositiveSystemJobSchedulerTest() throws Exception {
 		// "SystemJobScheduler" is a known Android class name that slips past ratio filters
 		String code = decompileSmali("b64/false_positive_system_job_scheduler.smali");

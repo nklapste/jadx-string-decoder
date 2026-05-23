@@ -1,6 +1,7 @@
 package jadx.plugins.stringdecoder;
 
 import java.util.Locale;
+import java.util.TreeMap;
 
 import jadx.api.plugins.input.data.annotations.EncodedType;
 import jadx.api.plugins.input.data.annotations.EncodedValue;
@@ -13,6 +14,7 @@ import jadx.core.dex.attributes.FieldInitInsnAttr;
 import jadx.core.dex.info.FieldInfo;
 import jadx.core.dex.info.MethodInfo;
 import jadx.core.dex.instructions.ConstStringNode;
+import jadx.core.dex.instructions.FilledNewArrayNode;
 import jadx.core.dex.instructions.IndexInsnNode;
 import jadx.core.dex.instructions.InsnType;
 import jadx.core.dex.instructions.InvokeNode;
@@ -60,6 +62,12 @@ public class B64FieldInitPass implements JadxDecompilePass {
 			InsnNode initInsn = initAttr.getInsn();
 			if (initInsn instanceof ConstStringNode) {
 				annotateField(field, ((ConstStringNode) initInsn).getString(), false);
+			} else if (initInsn instanceof FilledNewArrayNode) {
+				// B64DeobfuscatePass already handled small filled-new-array instructions
+				// (original Dalvik opcode); skip re-processing them.
+				if (!initInsn.contains(AType.CODE_COMMENTS)) {
+					findAndAnnotateFilledArray(field, (FilledNewArrayNode) initInsn);
+				}
 			} else {
 				findAndAnnotateInArgTree(field, initInsn, 0);
 			}
@@ -73,6 +81,45 @@ public class B64FieldInitPass implements JadxDecompilePass {
 			if (val instanceof String) {
 				annotateField(field, (String) val, false);
 			}
+		}
+	}
+
+	/**
+	 * Processes a FilledNewArrayNode field init with indexed, anchor-based detection.
+	 * Mirrors B64DeobfuscatePass array logic: only emits a comment when at least one element
+	 * passes full detection (the anchor), then includes all valid-Base64+UTF-8 elements
+	 * with their array indices so the caller can identify which element was decoded.
+	 */
+	private void findAndAnnotateFilledArray(FieldNode field, FilledNewArrayNode filledArray) {
+		TreeMap<Integer, B64Result> candidates = null;
+		boolean hasAnchor = false;
+		for (int idx = 0; idx < filledArray.getArgsCount(); idx++) {
+			InsnArg arg = filledArray.getArg(idx);
+			InsnNode argInsn = resolveArgInsn(arg);
+			String str = null;
+			if (argInsn instanceof ConstStringNode) {
+				str = ((ConstStringNode) argInsn).getString();
+			} else if (argInsn != null && argInsn.getType() == InsnType.SGET) {
+				str = resolveConstStringFromSget(field, (IndexInsnNode) argInsn);
+			}
+			if (str == null || B64FalsePositives.contains(str)) {
+				continue;
+			}
+			B64Result full = B64Detector.detect(str, options);
+			B64Result candidate = full != null ? full : B64Detector.decodeIfValid(str, options.getMaxCommentLength());
+			if (candidate == null) {
+				continue;
+			}
+			if (candidates == null) {
+				candidates = new TreeMap<>();
+			}
+			candidates.put(idx, candidate);
+			if (full != null) {
+				hasAnchor = true;
+			}
+		}
+		if (hasAnchor && candidates != null) {
+			field.addCodeComment(B64Result.buildIndexedComment(candidates));
 		}
 	}
 
