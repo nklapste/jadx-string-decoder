@@ -420,10 +420,10 @@ class JadxStringDecoderPluginTest {
 
 	@Test
 	public void multiB64InvokeChainTest() throws Exception {
-		// Two const-strings both used as direct Base64.decode args in the same method chain:
+		// Two const-strings both used as direct Base64.decode args in the same fully-inlined chain:
 		//   Class.forName(new String(Base64.decode("...", 0)))
 		//       .getMethod(new String(Base64.decode("...", 0)), ...)
-		// Both should get indexed b64 comments in left-to-right source order
+		// Both are grouped under the top-level statement and emitted as indexed comments.
 		String code = decompileSmali("b64/multi_b64_invoke.smali");
 		System.out.println(code);
 		assertThat(code).contains("b64[0]: android.app.ActivityThread");
@@ -438,6 +438,45 @@ class JadxStringDecoderPluginTest {
 		System.out.println(code);
 		assertThat(code).contains("bytes: \"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/\"");
 		assertThat(code).contains("bytes: \"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_\"");
+	}
+
+	@Test
+	public void b64ReflectTryCatchTest() throws Exception {
+		// Multiple Base64.decode strings inside try-catch blocks with conditional branching.
+		// ActivityThread+getPackageManager are in a fully-inlined chain → grouped as indexed comments.
+		// getPackageInfo has blocking invokes between its constructor and use → kept as an explicit
+		// variable str2, so the comment lands on str2 = new String(...) rather than on getMethod.
+		String code = decompileSmali("b64/b64_reflect_trycatch.smali");
+		System.out.println(code);
+		assertThat(code).contains("b64: android.os.UserHandle");
+		assertThat(code).contains("b64: getUserId");
+		assertThat(code).contains("b64[0]: android.app.ActivityThread");
+		assertThat(code).contains("b64[1]: getPackageManager");
+		assertThat(code).contains("b64: getPackageInfo");
+	}
+
+
+	@Test
+	public void b64CachedReflectionTest() throws Exception {
+		// Three Base64.decode strings in a cached-reflection pattern with try-catch + conditionals.
+		// ActivityThread+getPackageManager are in a fully-inlined chain → grouped as indexed comments.
+		// getPackagesForUid has a blocking Object.getClass() between its constructor and getMethod,
+		// but JADX still inlines the constructor, so the comment lands on the getMethod statement.
+		String code = decompileSmali("b64/b64_cached_reflection.smali");
+		System.out.println(code);
+		assertThat(code).contains("b64[0]: android.app.ActivityThread");
+		assertThat(code).contains("b64[1]: getPackageManager");
+		assertThat(code).contains("b64: getPackagesForUid");
+	}
+
+	@Test
+	public void b64InTryCatchTest() throws Exception {
+		// new String(Base64.decode("Z2V0UGFja2FnZUluZm8=", 0)) inside a .catchall block.
+		// "getPackageInfo" is camelCase and would normally be filtered, but the explicit
+		// Base64.decode call triggers decodeForced() which bypasses heuristics.
+		String code = decompileSmali("b64/b64_in_trycatch.smali");
+		System.out.println(code);
+		assertThat(code).contains("b64: getPackageInfo");
 	}
 
 	@Test
@@ -459,6 +498,7 @@ class JadxStringDecoderPluginTest {
 
 	private String decompileSmali(String fileName, Map<String, String> pluginOptions) throws Exception {
 		JadxArgs args = new JadxArgs();
+		args.isShowInconsistentCode();
 		args.getInputFiles().add(getSampleFile(fileName));
 		args.setPluginOptions(pluginOptions);
 		try (JadxDecompiler jadx = new JadxDecompiler(args)) {

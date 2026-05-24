@@ -18,6 +18,7 @@ import jadx.api.plugins.pass.JadxPassInfo;
 import jadx.api.plugins.pass.impl.OrderedJadxPassInfo;
 import jadx.api.plugins.pass.types.JadxDecompilePass;
 import jadx.core.codegen.utils.CodeComment;
+import jadx.core.dex.attributes.AFlag;
 import jadx.core.dex.attributes.AType;
 import jadx.core.dex.instructions.ConstStringNode;
 import jadx.core.dex.instructions.FilledNewArrayNode;
@@ -46,6 +47,7 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 				"B64Deobfuscate",
 				"Detect and decode likely Base64-encoded string constants")
 				.after("SSATransform")
+				.after("MarkFinallyVisitor")
 				.before("ConstInlineVisitor");
 	}
 
@@ -172,6 +174,12 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 	 * Attaching CODE_COMMENTS there — using the typed, list-merging addAttr — avoids the
 	 * replace-on-copy problem in inheritMetadata when multiple decoded strings live in the
 	 * same chained expression.
+	 *
+	 * Constructor pivot: when the chain enters an {@code invoke-direct <init>}, we pivot
+	 * through to the post-constructor user (the single non-init user of the new-instance
+	 * register) and continue walking from there. This ensures the comment always lands on
+	 * the enclosing statement rather than on the result-less {@code <init>} node, which
+	 * would be lost when ConstructorVisitor later merges new-instance + init.
 	 */
 	private static InsnNode findStatementInsn(ConstStringNode csn) {
 		RegisterArg result = csn.getResult();
@@ -194,8 +202,9 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 			}
 			RegisterArg useResult = useInsn.getResult();
 			if (useResult == null) {
-				// Constructor call (invoke-direct on <init>): the constructed object flows through
-				// arg[0] rather than a result register — pivot to its SSAVar and continue tracing.
+				// No result register: terminal statement (void call, constructor, sput, return, etc.).
+				// For constructors, pivot through to the post-constructor user so the comment lands
+				// on the enclosing statement rather than the result-less <init> node.
 				if (useInsn instanceof InvokeNode && ((InvokeNode) useInsn).getCallMth().isConstructor()) {
 					InsnArg arg0 = useInsn.getArg(0);
 					if (arg0 instanceof RegisterArg) {
@@ -224,24 +233,36 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 			if (useVar == null || useVar.getUseList().isEmpty()) {
 				return useInsn;
 			}
+			// Don't walk into SYNTHETIC instructions (control-flow merge points that JADX generates
+			// but doesn't render directly). When useInsn's result is only consumed by a SYNTHETIC
+			// instruction, the current instruction is the last one that produces visible code.
+			if (useVar.getUseList().size() == 1) {
+				InsnNode soleConsumer = useVar.getUseList().get(0).getParentInsn();
+				if (soleConsumer != null && soleConsumer.contains(AFlag.SYNTHETIC)) {
+					break;
+				}
+			}
 			current = useInsn;
 			var = useVar;
 		}
 		return current;
 	}
 
-	/** Returns the single use of {@code ctorVar} that is not the constructor call itself, or null. */
-	private static InsnNode singlePostCtorUser(SSAVar ctorVar, InsnNode ctorInsn) {
+	/**
+	 * Returns the single use of {@code ctorVar} that is not {@code ctor} itself, or null if
+	 * there are zero or more than one such uses.
+	 */
+	private static InsnNode singlePostCtorUser(SSAVar ctorVar, InsnNode ctor) {
+		List<RegisterArg> uses = ctorVar.getUseList();
 		InsnNode found = null;
-		for (RegisterArg use : ctorVar.getUseList()) {
+		for (RegisterArg use : uses) {
 			InsnNode parent = use.getParentInsn();
-			if (parent == null || parent == ctorInsn) {
-				continue;
+			if (parent != null && parent != ctor) {
+				if (found != null) {
+					return null;
+				}
+				found = parent;
 			}
-			if (found != null) {
-				return null;
-			}
-			found = parent;
 		}
 		return found;
 	}
