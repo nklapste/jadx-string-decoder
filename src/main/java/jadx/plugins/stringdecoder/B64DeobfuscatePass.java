@@ -169,17 +169,9 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 	}
 
 	/**
-	 * Walks the SSA def-use chain from {@code csn} upward to find the top-level statement
-	 * instruction (the one that is not itself consumed by another instruction).
-	 * Attaching CODE_COMMENTS there — using the typed, list-merging addAttr — avoids the
-	 * replace-on-copy problem in inheritMetadata when multiple decoded strings live in the
-	 * same chained expression.
-	 *
-	 * Constructor pivot: when the chain enters an {@code invoke-direct <init>}, we pivot
-	 * through to the post-constructor user (the single non-init user of the new-instance
-	 * register) and continue walking from there. This ensures the comment always lands on
-	 * the enclosing statement rather than on the result-less {@code <init>} node, which
-	 * would be lost when ConstructorVisitor later merges new-instance + init.
+	 * Walks the SSA def-use chain to find the top-level statement instruction.
+	 * Pivots through {@code <init>} constructors to avoid landing on the result-less init node,
+	 * which would be lost when ConstructorVisitor later merges new-instance + init.
 	 */
 	private static InsnNode findStatementInsn(ConstStringNode csn) {
 		RegisterArg result = csn.getResult();
