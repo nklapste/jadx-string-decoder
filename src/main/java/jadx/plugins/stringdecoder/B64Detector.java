@@ -72,13 +72,16 @@ public final class B64Detector {
 		return null;
 	}
 
+	private static CharsetDecoder newUtf8Decoder(CodingErrorAction action) {
+		return StandardCharsets.UTF_8.newDecoder()
+				.onMalformedInput(action)
+				.onUnmappableCharacter(action);
+	}
+
 	private static B64Result attemptDecode(Base64.Decoder decoder, String str, B64DeobfuscateOptions options, String tag) {
 		try {
 			byte[] bytes = decoder.decode(str);
-			CharsetDecoder utf8 = StandardCharsets.UTF_8.newDecoder()
-					.onMalformedInput(CodingErrorAction.REPORT)
-					.onUnmappableCharacter(CodingErrorAction.REPORT);
-			String decoded = utf8.decode(ByteBuffer.wrap(bytes)).toString();
+			String decoded = newUtf8Decoder(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
 			if (!isPrintable(decoded, options.getMinPrintableRatio())) {
 				return null;
 			}
@@ -143,10 +146,7 @@ public final class B64Detector {
 				if (bytes.length == 0) {
 					return null;
 				}
-				CharsetDecoder utf8 = StandardCharsets.UTF_8.newDecoder()
-						.onMalformedInput(CodingErrorAction.REPORT)
-						.onUnmappableCharacter(CodingErrorAction.REPORT);
-				String decoded = utf8.decode(ByteBuffer.wrap(bytes)).toString();
+					String decoded = newUtf8Decoder(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
 				return new B64Result(truncate(decoded, maxCommentLength), tags[i]);
 			} catch (IllegalArgumentException | CharacterCodingException ignored) {
 				// decoder.decode() rejects malformed Base64; utf8.decode() rejects invalid UTF-8
@@ -168,10 +168,7 @@ public final class B64Detector {
 				if (bytes.length == 0) {
 					return null;
 				}
-				CharsetDecoder utf8 = StandardCharsets.UTF_8.newDecoder()
-						.onMalformedInput(CodingErrorAction.REPLACE)
-						.onUnmappableCharacter(CodingErrorAction.REPLACE);
-				String decoded = utf8.decode(ByteBuffer.wrap(bytes)).toString();
+				String decoded = newUtf8Decoder(CodingErrorAction.REPLACE).decode(ByteBuffer.wrap(bytes)).toString();
 				return new B64Result(truncate(decoded, maxCommentLength), ALL_DECODER_TAGS[i]);
 			} catch (IllegalArgumentException | CharacterCodingException ignored) {
 				// decoder.decode() rejects malformed Base64; utf8.decode() on REPLACE mode won't throw, but guard anyway
