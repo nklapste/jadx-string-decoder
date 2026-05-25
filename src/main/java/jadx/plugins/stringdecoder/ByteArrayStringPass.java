@@ -1,10 +1,7 @@
 package jadx.plugins.stringdecoder;
 
-import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
-import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
 
 import jadx.api.plugins.pass.JadxPassInfo;
 import jadx.api.plugins.pass.impl.OrderedJadxPassInfo;
@@ -17,7 +14,6 @@ import jadx.core.dex.instructions.args.InsnArg;
 import jadx.core.dex.instructions.args.LiteralArg;
 import jadx.core.dex.nodes.ClassNode;
 import jadx.core.dex.nodes.FieldNode;
-import jadx.core.dex.nodes.InsnNode;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.nodes.RootNode;
 
@@ -49,35 +45,50 @@ public class ByteArrayStringPass implements JadxDecompilePass {
 		return true;
 	}
 
-	private void processField(FieldNode field) {
-		FieldInitInsnAttr initAttr = field.get(AType.FIELD_INIT_INSN);
-		if (initAttr == null) {
-			return;
-		}
-		InsnNode insn = initAttr.getInsn();
-		if (!(insn instanceof FilledNewArrayNode)) {
-			return;
-		}
-		FilledNewArrayNode filledArr = (FilledNewArrayNode) insn;
-		ArgType elemType = filledArr.getElemType();
-		if (!ArgType.BYTE.equals(elemType) && !ArgType.INT.equals(elemType)) {
-			return;
-		}
-		byte[] bytes = extractLiteralBytes(filledArr);
-		if (bytes == null || bytes.length == 0) {
-			return;
-		}
-		String decoded = tryDecodeAsString(bytes);
-		if (decoded != null) {
-			field.addCodeComment("bytes: \"" + B64Detector.truncate(decoded, options.getMaxCommentLength()) + "\"");
-		}
+	@Override
+	public void visit(MethodNode mth) {
 	}
 
-	private static byte[] extractLiteralBytes(FilledNewArrayNode insn) {
-		int count = insn.getArgsCount();
+	private void processField(FieldNode field) {
+		FilledNewArrayNode arr = extractByteOrIntArray(field);
+		if (arr == null) {
+			return;
+		}
+		byte[] bytes = extractByteLiterals(arr);
+		if (bytes == null) {
+			return;
+		}
+		String decoded = decodeUtf8OrNull(bytes);
+		if (decoded == null || !passesPrintabilityChecks(decoded)) {
+			return;
+		}
+		field.addCodeComment("bytes: \"" + B64Detector.truncate(decoded, options.getMaxCommentLength()) + "\"");
+	}
+
+	/** Returns the field's filled-new-array init if its element type is byte or int, otherwise null. */
+	private static FilledNewArrayNode extractByteOrIntArray(FieldNode field) {
+		FieldInitInsnAttr initAttr = field.get(AType.FIELD_INIT_INSN);
+		if (initAttr == null || !(initAttr.getInsn() instanceof FilledNewArrayNode)) {
+			return null;
+		}
+		FilledNewArrayNode arr = (FilledNewArrayNode) initAttr.getInsn();
+		ArgType elem = arr.getElemType();
+		if (!ArgType.BYTE.equals(elem) && !ArgType.INT.equals(elem)) {
+			return null;
+		}
+		return arr.getArgsCount() == 0 ? null : arr;
+	}
+
+	/**
+	 * Converts every array element to a byte. Returns null if any element is non-literal or
+	 * outside {@code [0, 255]} — the latter rules out int[] sentinel tables (e.g. {@code -1}
+	 * markers in a Base64 decode table).
+	 */
+	private static byte[] extractByteLiterals(FilledNewArrayNode arr) {
+		int count = arr.getArgsCount();
 		byte[] bytes = new byte[count];
 		for (int i = 0; i < count; i++) {
-			InsnArg arg = insn.getArg(i);
+			InsnArg arg = arr.getArg(i);
 			if (!(arg instanceof LiteralArg)) {
 				return null;
 			}
@@ -90,26 +101,19 @@ public class ByteArrayStringPass implements JadxDecompilePass {
 		return bytes;
 	}
 
-	private String tryDecodeAsString(byte[] bytes) {
+	private static String decodeUtf8OrNull(byte[] bytes) {
 		try {
-			CharsetDecoder utf8 = StandardCharsets.UTF_8.newDecoder()
-					.onMalformedInput(CodingErrorAction.REPORT)
-					.onUnmappableCharacter(CodingErrorAction.REPORT);
-			String decoded = utf8.decode(ByteBuffer.wrap(bytes)).toString();
-			if (!B64Detector.isPrintable(decoded, options.getByteArrayMinPrintableRatio())) {
-				return null;
-			}
-			int minDecoded = options.getMinDecodedLength();
-			if (minDecoded > 0 && decoded.length() < minDecoded) {
-				return null;
-			}
-			return decoded;
-		} catch (CharacterCodingException e) {
+			return B64Detector.decodeUtf8(bytes, CodingErrorAction.REPORT);
+		} catch (CharacterCodingException ignored) {
 			return null;
 		}
 	}
 
-	@Override
-	public void visit(MethodNode mth) {
+	private boolean passesPrintabilityChecks(String decoded) {
+		if (!B64Detector.isPrintable(decoded, options.getByteArrayMinPrintableRatio())) {
+			return false;
+		}
+		int minDecoded = options.getMinDecodedLength();
+		return minDecoded <= 0 || decoded.length() >= minDecoded;
 	}
 }

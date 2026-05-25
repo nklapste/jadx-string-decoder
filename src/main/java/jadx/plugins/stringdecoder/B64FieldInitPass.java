@@ -29,6 +29,8 @@ import jadx.core.dex.nodes.RootNode;
 
 public class B64FieldInitPass implements JadxDecompilePass {
 
+	private static final int MAX_ARG_TREE_DEPTH = 8;
+
 	private final B64DeobfuscateOptions options;
 
 	public B64FieldInitPass(B64DeobfuscateOptions options) {
@@ -55,111 +57,104 @@ public class B64FieldInitPass implements JadxDecompilePass {
 		return true;
 	}
 
+	@Override
+	public void visit(MethodNode mth) {
+	}
+
 	private void processField(FieldNode field) {
-		// Case 1: field initialised via <clinit> / constructor and extracted by ExtractFieldInit
 		FieldInitInsnAttr initAttr = field.get(AType.FIELD_INIT_INSN);
 		if (initAttr != null) {
-			InsnNode initInsn = initAttr.getInsn();
-			if (initInsn instanceof ConstStringNode) {
-				annotateField(field, ((ConstStringNode) initInsn).getString(), false);
-			} else if (initInsn instanceof FilledNewArrayNode) {
-				// B64DeobfuscatePass already handled small filled-new-array instructions
-				// (original Dalvik opcode); skip re-processing them.
-				if (!initInsn.contains(AType.CODE_COMMENTS)) {
-					findAndAnnotateFilledArray(field, (FilledNewArrayNode) initInsn);
-				}
-			} else {
-				findAndAnnotateInArgTree(field, initInsn, 0);
-			}
+			processExtractedInit(field, initAttr.getInsn());
 			return;
 		}
-
-		// Case 2: static final field with a literal value encoded as CONSTANT_VALUE (no <clinit>)
-		EncodedValue constVal = field.get(JadxAttrType.CONSTANT_VALUE);
-		if (constVal != null && constVal.getType() == EncodedType.ENCODED_STRING) {
-			Object val = constVal.getValue();
-			if (val instanceof String) {
-				annotateField(field, (String) val, false);
-			}
+		// static final field with literal value encoded in the class file (no <clinit>).
+		String constStr = readConstantStringValue(field);
+		if (constStr != null) {
+			annotateField(field, constStr, false);
 		}
 	}
 
+	/** Dispatch on the shape of the extracted init instruction. */
+	private void processExtractedInit(FieldNode field, InsnNode initInsn) {
+		if (initInsn instanceof ConstStringNode) {
+			annotateField(field, ((ConstStringNode) initInsn).getString(), false);
+			return;
+		}
+		if (initInsn instanceof FilledNewArrayNode) {
+			FilledNewArrayNode arr = (FilledNewArrayNode) initInsn;
+			// B64DeobfuscatePass already handled the original filled-new-array — skip if commented.
+			if (!arr.contains(AType.CODE_COMMENTS)) {
+				annotateFilledArray(field, arr);
+			}
+			return;
+		}
+		// Complex init expression (e.g. `new String(Base64.decode("...", 0))`) — walk arg tree.
+		findAndAnnotateInArgTree(field, initInsn, 0);
+	}
+
 	/**
-	 * Processes a FilledNewArrayNode field init with indexed, anchor-based detection.
-	 * Mirrors B64DeobfuscatePass array logic: only emits a comment when at least one element
-	 * passes full detection (the anchor), then includes all valid-Base64+UTF-8 elements
-	 * with their array indices so the caller can identify which element was decoded.
+	 * Indexed, anchor-based detection for filled-new-array field inits. Emits a comment only when
+	 * at least one element passes full detection (the anchor); every valid Base64+UTF-8 element is
+	 * then included with its array index.
 	 */
-	private void findAndAnnotateFilledArray(FieldNode field, FilledNewArrayNode filledArray) {
-		TreeMap<Integer, B64Result> candidates = null;
+	private void annotateFilledArray(FieldNode field, FilledNewArrayNode filledArray) {
+		TreeMap<Integer, B64Result> candidates = new TreeMap<>();
 		boolean hasAnchor = false;
 		for (int idx = 0; idx < filledArray.getArgsCount(); idx++) {
-			InsnArg arg = filledArray.getArg(idx);
-			InsnNode argInsn = resolveArgInsn(arg);
-			String str = null;
-			if (argInsn instanceof ConstStringNode) {
-				str = ((ConstStringNode) argInsn).getString();
-			} else if (argInsn != null && argInsn.getType() == InsnType.SGET) {
-				str = resolveConstStringFromSget(field, (IndexInsnNode) argInsn);
-			}
+			String str = extractStringFromArg(field, filledArray.getArg(idx));
 			if (str == null || B64FalsePositives.contains(str)) {
 				continue;
 			}
 			B64Result full = B64Detector.detect(str, options);
-			B64Result candidate = full != null ? full : B64Detector.decodeIfValid(str, options.getMaxCommentLength());
-			if (candidate == null) {
+			B64Result chosen = full != null ? full : B64Detector.decodeIfValid(str, options.getMaxCommentLength());
+			if (chosen == null) {
 				continue;
 			}
-			if (candidates == null) {
-				candidates = new TreeMap<>();
-			}
-			candidates.put(idx, candidate);
+			candidates.put(idx, chosen);
 			if (full != null) {
 				hasAnchor = true;
 			}
 		}
-		if (hasAnchor && candidates != null) {
+		if (hasAnchor) {
 			field.addCodeComment(B64Result.buildIndexedComment(candidates));
 		}
 	}
 
-	/**
-	 * Recursively walks the instruction arg tree looking for a ConstStringNode.
-	 * When the ConstStringNode is a direct arg of a Base64.decode-like call, decodes
-	 * unconditionally (the call itself is strong evidence of intent).
-	 * Otherwise, applies normal false-positive checks via {@link B64Detector#detect}.
-	 */
-	private static final int MAX_ARG_TREE_DEPTH = 8;
+	/** Resolves an arg to a literal string (direct ConstString or SGET to a CONSTANT_VALUE field), or null. */
+	private static String extractStringFromArg(FieldNode contextField, InsnArg arg) {
+		InsnNode argInsn = resolveArgInsn(arg);
+		if (argInsn instanceof ConstStringNode) {
+			return ((ConstStringNode) argInsn).getString();
+		}
+		if (argInsn != null && argInsn.getType() == InsnType.SGET) {
+			FieldNode refField = resolveFieldFromSget(contextField, (IndexInsnNode) argInsn);
+			return refField != null ? readConstantStringValue(refField) : null;
+		}
+		return null;
+	}
 
+	/**
+	 * Walks the instruction arg tree looking for a ConstStringNode. When the ConstStringNode is a
+	 * direct arg to a Base64.decode-like call, decodes unconditionally; otherwise applies normal
+	 * false-positive checks. Returns true if a comment was added.
+	 */
 	private boolean findAndAnnotateInArgTree(FieldNode field, InsnNode insn, int depth) {
 		if (insn == null || depth > MAX_ARG_TREE_DEPTH) {
 			return false;
 		}
 		boolean isBase64Call = isBase64DecodeCall(insn);
 		for (int i = 0; i < insn.getArgsCount(); i++) {
-			InsnArg arg = insn.getArg(i);
-			InsnNode argInsn = resolveArgInsn(arg);
+			InsnNode argInsn = resolveArgInsn(insn.getArg(i));
 			if (argInsn == null) {
 				continue;
 			}
 			if (argInsn instanceof ConstStringNode) {
-				String str = ((ConstStringNode) argInsn).getString();
-				if (annotateField(field, str, isBase64Call)) {
+				if (annotateField(field, ((ConstStringNode) argInsn).getString(), isBase64Call)) {
 					return true;
 				}
 			} else if (argInsn.getType() == InsnType.SGET) {
-				// const-string may have been replaced by an SGET to a CONSTANT_VALUE field
-				// (JADX's replaceConsts rewrites const-string to sget when a matching field exists)
-				String str = resolveConstStringFromSget(field, (IndexInsnNode) argInsn);
-				if (str != null) {
-					if (annotateField(field, str, isBase64Call)) {
-						// The string is a direct Base64.decode arg — also force-annotate the source
-						// String field so it gets a comment even if it fails the alphanumeric check
-						if (isBase64Call) {
-							forceAnnotateSourceField(field, (IndexInsnNode) argInsn, str);
-						}
-						return true;
-					}
+				if (annotateFromSgetReference(field, (IndexInsnNode) argInsn, isBase64Call)) {
+					return true;
 				}
 			} else if (findAndAnnotateInArgTree(field, argInsn, depth + 1)) {
 				return true;
@@ -169,49 +164,42 @@ public class B64FieldInitPass implements JadxDecompilePass {
 	}
 
 	/**
-	 * When a CONSTANT_VALUE String field is the direct arg to a Base64.decode call,
-	 * force-annotates it so the source field gets a comment regardless of the alphanumeric
-	 * threshold (the explicit decode call is sufficient evidence of intent).
+	 * The const-string may have been rewritten to sget by JADX's replaceConsts when a matching
+	 * CONSTANT_VALUE field exists. Annotate the consuming field; if the original call was a
+	 * Base64.decode, also force-annotate the referenced source field so the encoded literal is
+	 * commented at its declaration site.
 	 */
-	private void forceAnnotateSourceField(FieldNode contextField, IndexInsnNode sgetInsn, String str) {
-		FieldInfo refFieldInfo = (FieldInfo) sgetInsn.getIndex();
-		ClassNode declCls = contextField.root().resolveClass(refFieldInfo.getDeclClass());
-		if (declCls == null) {
-			return;
-		}
-		FieldNode srcField = declCls.searchField(refFieldInfo);
-		if (srcField == null || srcField.get(AType.FIELD_INIT_INSN) != null) {
-			return;
-		}
-		if (B64FalsePositives.contains(str)) {
-			return;
-		}
-		B64Result result = B64Detector.decodeForced(str, options.getMaxCommentLength());
-		if (result != null) {
-			srcField.addCodeComment(result.commentText());
-		}
-	}
-
-	/** Follows an SGET to the referenced field's CONSTANT_VALUE string, or returns null. */
-	private static String resolveConstStringFromSget(FieldNode contextField, IndexInsnNode sgetInsn) {
-		FieldInfo refFieldInfo = (FieldInfo) sgetInsn.getIndex();
-		RootNode root = contextField.root();
-		ClassNode declCls = root.resolveClass(refFieldInfo.getDeclClass());
-		if (declCls == null) {
-			return null;
-		}
-		FieldNode refField = declCls.searchField(refFieldInfo);
+	private boolean annotateFromSgetReference(FieldNode consumingField, IndexInsnNode sget, boolean isBase64Call) {
+		FieldNode refField = resolveFieldFromSget(consumingField, sget);
 		if (refField == null) {
-			return null;
+			return false;
 		}
-		EncodedValue constVal = refField.get(JadxAttrType.CONSTANT_VALUE);
-		if (constVal != null && constVal.getType() == EncodedType.ENCODED_STRING) {
-			Object val = constVal.getValue();
-			if (val instanceof String) {
-				return (String) val;
+		String str = readConstantStringValue(refField);
+		if (str == null || !annotateField(consumingField, str, isBase64Call)) {
+			return false;
+		}
+		if (isBase64Call && refField.get(AType.FIELD_INIT_INSN) == null && !B64FalsePositives.contains(str)) {
+			B64Result r = B64Detector.decodeForced(str, options.getMaxCommentLength());
+			if (r != null) {
+				refField.addCodeComment(r.commentText());
 			}
 		}
-		return null;
+		return true;
+	}
+
+	private static FieldNode resolveFieldFromSget(FieldNode contextField, IndexInsnNode sgetInsn) {
+		FieldInfo refFieldInfo = (FieldInfo) sgetInsn.getIndex();
+		ClassNode declCls = contextField.root().resolveClass(refFieldInfo.getDeclClass());
+		return declCls != null ? declCls.searchField(refFieldInfo) : null;
+	}
+
+	private static String readConstantStringValue(FieldNode field) {
+		EncodedValue cv = field.get(JadxAttrType.CONSTANT_VALUE);
+		if (cv == null || cv.getType() != EncodedType.ENCODED_STRING) {
+			return null;
+		}
+		Object val = cv.getValue();
+		return val instanceof String ? (String) val : null;
 	}
 
 	private static InsnNode resolveArgInsn(InsnArg arg) {
@@ -224,22 +212,6 @@ public class B64FieldInitPass implements JadxDecompilePass {
 		return null;
 	}
 
-	/** Returns true if {@code insn} looks like a call to a Base64 decode method. */
-	static boolean isBase64DecodeCall(InsnNode insn) {
-		if (!(insn instanceof InvokeNode)) {
-			return false;
-		}
-		MethodInfo mth = ((InvokeNode) insn).getCallMth();
-		String clsName = mth.getDeclClass().getFullName().toLowerCase(Locale.ROOT);
-		String mthName = mth.getName().toLowerCase(Locale.ROOT);
-		return clsName.contains("base64") && mthName.contains("decode");
-	}
-
-	/**
-	 * Annotates the field if the string is valid Base64.
-	 * When {@code forced} is true, skips false-positive heuristics.
-	 * Returns true if a comment was added.
-	 */
 	private boolean annotateField(FieldNode field, String str, boolean forced) {
 		if (B64FalsePositives.contains(str)) {
 			return false;
@@ -247,14 +219,19 @@ public class B64FieldInitPass implements JadxDecompilePass {
 		B64Result result = forced
 				? B64Detector.decodeForced(str, options.getMaxCommentLength())
 				: B64Detector.detect(str, options);
-		if (result != null) {
-			field.addCodeComment(result.commentText());
-			return true;
+		if (result == null) {
+			return false;
 		}
-		return false;
+		field.addCodeComment(result.commentText());
+		return true;
 	}
 
-	@Override
-	public void visit(MethodNode mth) {
+	private static boolean isBase64DecodeCall(InsnNode insn) {
+		if (!(insn instanceof InvokeNode)) {
+			return false;
+		}
+		MethodInfo mth = ((InvokeNode) insn).getCallMth();
+		return mth.getDeclClass().getFullName().toLowerCase(Locale.ROOT).contains("base64")
+				&& mth.getName().toLowerCase(Locale.ROOT).contains("decode");
 	}
 }

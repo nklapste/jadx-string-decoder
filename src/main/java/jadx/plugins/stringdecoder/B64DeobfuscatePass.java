@@ -4,11 +4,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import jadx.api.data.CommentStyle;
 import jadx.api.plugins.input.data.annotations.EncodedType;
@@ -20,6 +22,7 @@ import jadx.api.plugins.pass.types.JadxDecompilePass;
 import jadx.core.codegen.utils.CodeComment;
 import jadx.core.dex.attributes.AFlag;
 import jadx.core.dex.attributes.AType;
+import jadx.core.dex.info.MethodInfo;
 import jadx.core.dex.instructions.ConstStringNode;
 import jadx.core.dex.instructions.FilledNewArrayNode;
 import jadx.core.dex.instructions.InvokeNode;
@@ -34,6 +37,9 @@ import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.nodes.RootNode;
 
 public class B64DeobfuscatePass implements JadxDecompilePass {
+
+	// Safety bound for SSA def-use chain walks; real chains are short, this just prevents pathological loops.
+	private static final int MAX_STMT_WALK_DEPTH = 16;
 
 	private final B64DeobfuscateOptions options;
 
@@ -69,216 +75,202 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 		if (blocks == null) {
 			return;
 		}
-		// Lazily built on the first B64 hit — avoids field scan for methods with no B64 strings
-		Set<String> fieldConstants = null;
-		// Decoded strings grouped by their top-level statement instruction (insertion = source order)
-		Map<InsnNode, List<B64Result>> stmtCandidates = null;
-		// Arrays where ≥1 string passed normal detect() — required anchor for contextual decoding
-		Set<InsnNode> arrayAnchors = null;
-		// All valid-B64+UTF-8 strings in arrays (superset of anchors; used for the final comment)
-		Map<InsnNode, TreeMap<Integer, B64Result>> arrayCandidates = null;
-
-		for (BlockNode block : blocks) {
-			for (InsnNode insn : block.getInstructions()) {
-				if (!(insn instanceof ConstStringNode)) {
-					continue;
-				}
-				ConstStringNode csn = (ConstStringNode) insn;
-				String str = csn.getString();
-
-				// If the string is an arg to an explicit Base64.decode call, decode unconditionally.
-				// The call itself is strong evidence of intent — skip false-positive heuristics,
-				// but still respect the explicit blocklist.
-				boolean forced = isUsedAsBase64DecodeArg(csn);
-				if (forced && B64FalsePositives.contains(str)) {
-					forced = false;
-				}
-				B64Result decoded = forced
-						? B64Detector.decodeForced(str, options.getMaxCommentLength())
-						: B64Detector.detect(str, options);
-
-				// If this string feeds a FilledNewArrayNode, use contextual detection:
-				// a string that fails heuristics (e.g. skipIdentifiers) is still included as a
-				// candidate if at least one sibling in the array passes normal detection.
-				FilledNewArrayNode arrayParent = findFilledNewArrayParent(csn);
-				if (arrayParent != null) {
-					int idx = argIndexOf(arrayParent, csn.getResult().getSVar());
-					if (idx < 0) {
-						continue;
-					}
-					// Determine the best available decoded value for this slot
-					B64Result candidate = decoded != null ? decoded
-							: B64Detector.decodeIfValid(str, options.getMaxCommentLength());
-					if (candidate == null) {
-						continue;
-					}
-					if (fieldConstants == null) {
-						fieldConstants = collectConstantValueFieldStrings(mth.getParentClass());
-					}
-					if (fieldConstants.contains(str)) {
-						continue;
-					}
-					if (arrayCandidates == null) {
-						arrayCandidates = new LinkedHashMap<>();
-					}
-					arrayCandidates.computeIfAbsent(arrayParent, k -> new TreeMap<>()).put(idx, candidate);
-					if (decoded != null) {
-						if (arrayAnchors == null) {
-							arrayAnchors = new LinkedHashSet<>();
-						}
-						arrayAnchors.add(arrayParent);
-					}
-					continue;
-				}
-
-				if (decoded == null) {
-					continue;
-				}
-				if (fieldConstants == null) {
-					fieldConstants = collectConstantValueFieldStrings(mth.getParentClass());
-				}
-				// Skip strings that are static final CONSTANT_VALUE fields — B64FieldInitPass handles those
-				if (fieldConstants.contains(str)) {
-					continue;
-				}
-				if (stmtCandidates == null) {
-					stmtCandidates = new LinkedHashMap<>();
-				}
-				stmtCandidates.computeIfAbsent(findStatementInsn(csn), k -> new ArrayList<>()).add(decoded);
-			}
-		}
-
-		if (stmtCandidates != null) {
-			for (Map.Entry<InsnNode, List<B64Result>> e : stmtCandidates.entrySet()) {
-				List<B64Result> results = e.getValue();
-				String comment = results.size() == 1
-						? results.get(0).commentText()
-						: buildChainComment(results);
-				e.getKey().addAttr(AType.CODE_COMMENTS, new CodeComment(comment, CommentStyle.LINE));
-			}
-		}
-
-		// Only emit array comments for arrays with at least one confirmed detection (the anchor).
-		// This prevents annotating arrays that happen to contain valid-looking Base64 by coincidence.
-		if (arrayAnchors != null) {
-			for (InsnNode arrayInsn : arrayAnchors) {
-				String comment = buildArrayComment(arrayCandidates.get(arrayInsn));
-				arrayInsn.addAttr(AType.CODE_COMMENTS, new CodeComment(comment, CommentStyle.LINE));
-			}
-		}
+		MethodCandidates candidates = collectCandidates(mth, blocks);
+		emitCandidates(candidates);
 	}
 
+	// ---- candidate collection ----
+
+	/** Mutable per-method aggregation of every comment that needs to be emitted. */
+	private static final class MethodCandidates {
+		// Decoded strings grouped by their top-level statement (insertion = source order).
+		final Map<InsnNode, List<B64Result>> statementCandidates = new LinkedHashMap<>();
+		// Per filled-new-array: indexed candidates + anchor flag.
+		final Map<InsnNode, ArrayCandidateCollector> arrayCandidates = new LinkedHashMap<>();
+	}
+
+	private MethodCandidates collectCandidates(MethodNode mth, List<BlockNode> blocks) {
+		MethodCandidates candidates = new MethodCandidates();
+		Set<String> fieldConstants = collectConstantValueFieldStrings(mth.getParentClass());
+		for (BlockNode block : blocks) {
+			for (InsnNode insn : block.getInstructions()) {
+				if (insn instanceof ConstStringNode) {
+					classifyConstString((ConstStringNode) insn, candidates, fieldConstants);
+				}
+			}
+		}
+		return candidates;
+	}
+
+	/** Route a single ConstStringNode to either array-element handling or statement-level handling. */
+	private void classifyConstString(ConstStringNode csn, MethodCandidates candidates,
+			Set<String> fieldConstants) {
+		String str = csn.getString();
+		B64Result decoded = detectOrForce(csn, str);
+
+		FilledNewArrayNode arrayParent = findFilledNewArrayParent(csn);
+		if (arrayParent != null) {
+			recordArrayElement(csn, arrayParent, str, decoded, candidates, fieldConstants);
+			return;
+		}
+		if (decoded == null || fieldConstants.contains(str)) {
+			return;
+		}
+		InsnNode statement = findStatementInsn(csn);
+		candidates.statementCandidates.computeIfAbsent(statement, k -> new ArrayList<>()).add(decoded);
+	}
+
+	/** Pick the right detection mode: forced when the string feeds a Base64.decode call, otherwise heuristic. */
+	private B64Result detectOrForce(ConstStringNode csn, String str) {
+		boolean forced = !B64FalsePositives.contains(str) && isUsedAsBase64DecodeArg(csn);
+		return forced
+				? B64Detector.decodeForced(str, options.getMaxCommentLength())
+				: B64Detector.detect(str, options);
+	}
+
+	private void recordArrayElement(ConstStringNode csn, FilledNewArrayNode arrayParent, String str,
+			B64Result decoded, MethodCandidates candidates, Set<String> fieldConstants) {
+		int idx = argIndexOf(arrayParent, csn.getResult().getSVar());
+		if (idx < 0 || fieldConstants.contains(str)) {
+			return;
+		}
+		B64Result fallback = decoded != null ? null
+				: B64Detector.decodeIfValid(str, options.getMaxCommentLength());
+		candidates.arrayCandidates
+				.computeIfAbsent(arrayParent, k -> new ArrayCandidateCollector())
+				.add(idx, decoded, fallback);
+	}
+
+	// ---- emission ----
+
+	private static void emitCandidates(MethodCandidates candidates) {
+		candidates.statementCandidates.forEach((stmt, results) -> {
+			String comment = results.size() == 1 ? results.get(0).commentText() : buildChainComment(results);
+			stmt.addAttr(AType.CODE_COMMENTS, new CodeComment(comment, CommentStyle.LINE));
+		});
+		candidates.arrayCandidates.forEach((arrayInsn, collector) -> {
+			if (collector.hasAnchor()) {
+				arrayInsn.addAttr(AType.CODE_COMMENTS,
+						new CodeComment(collector.buildComment(), CommentStyle.LINE));
+			}
+		});
+	}
+
+	private static String buildChainComment(List<B64Result> results) {
+		return IntStream.range(0, results.size())
+				.mapToObj(i -> "\n" + results.get(i).indexedCommentText(i))
+				.collect(Collectors.joining());
+	}
+
+	// ---- SSA / def-use plumbing ----
+
 	/**
-	 * Walks the SSA def-use chain to find the top-level statement instruction.
-	 * Pivots through {@code <init>} constructors to avoid landing on the result-less init node,
-	 * which would be lost when ConstructorVisitor later merges new-instance + init.
+	 * Walks the SSA def-use chain forward to find the top-level statement instruction that should
+	 * carry the inline comment. The walk pivots through {@code <init>} constructors so the comment
+	 * lands on the enclosing statement instead of the result-less init node (which is later merged
+	 * with new-instance by ConstructorVisitor).
 	 */
 	private static InsnNode findStatementInsn(ConstStringNode csn) {
-		RegisterArg result = csn.getResult();
-		if (result == null) {
-			return csn;
-		}
-		SSAVar var = result.getSVar();
+		SSAVar var = ssaVarOf(csn);
 		if (var == null) {
 			return csn;
 		}
 		InsnNode current = csn;
-		for (int depth = 0; depth < 16; depth++) {
-			List<RegisterArg> uses = var.getUseList();
-			if (uses.size() != 1) {
-				break;
+		for (int depth = 0; depth < MAX_STMT_WALK_DEPTH; depth++) {
+			InsnNode user = soleUserOf(var);
+			if (user == null) {
+				return current;
 			}
-			InsnNode useInsn = uses.get(0).getParentInsn();
-			if (useInsn == null) {
-				break;
-			}
-			RegisterArg useResult = useInsn.getResult();
-			if (useResult == null) {
-				// No result register: terminal statement (void call, constructor, sput, return, etc.).
-				// For constructors, pivot through to the post-constructor user so the comment lands
-				// on the enclosing statement rather than the result-less <init> node.
-				if (useInsn instanceof InvokeNode && ((InvokeNode) useInsn).getCallMth().isConstructor()) {
-					InsnArg arg0 = useInsn.getArg(0);
-					if (arg0 instanceof RegisterArg) {
-						SSAVar ctorVar = ((RegisterArg) arg0).getSVar();
-						if (ctorVar != null) {
-							InsnNode postCtorUser = singlePostCtorUser(ctorVar, useInsn);
-							if (postCtorUser != null) {
-								RegisterArg postResult = postCtorUser.getResult();
-								if (postResult == null) {
-									return postCtorUser;
-								}
-								SSAVar postVar = postResult.getSVar();
-								if (postVar == null || postVar.getUseList().isEmpty()) {
-									return postCtorUser;
-								}
-								current = postCtorUser;
-								var = postVar;
-								continue;
-							}
-						}
-					}
+			RegisterArg userResult = user.getResult();
+			if (userResult == null) {
+				// Result-less consumer (void call, ctor, sput, return). Constructors get pivoted
+				// past so the comment lands on the post-ctor user rather than the result-less init.
+				InsnNode pivoted = pivotPastConstructor(user);
+				if (pivoted == user) {
+					return user;
 				}
-				return useInsn;
-			}
-			SSAVar useVar = useResult.getSVar();
-			if (useVar == null || useVar.getUseList().isEmpty()) {
-				return useInsn;
-			}
-			// Don't walk into SYNTHETIC instructions (control-flow merge points that JADX generates
-			// but doesn't render directly). When useInsn's result is only consumed by a SYNTHETIC
-			// instruction, the current instruction is the last one that produces visible code.
-			if (useVar.getUseList().size() == 1) {
-				InsnNode soleConsumer = useVar.getUseList().get(0).getParentInsn();
-				if (soleConsumer != null && soleConsumer.contains(AFlag.SYNTHETIC)) {
-					break;
+				SSAVar pivotVar = ssaVarOf(pivoted);
+				if (pivotVar == null || pivotVar.getUseList().isEmpty()) {
+					return pivoted;
 				}
+				current = pivoted;
+				var = pivotVar;
+				continue;
 			}
-			current = useInsn;
-			var = useVar;
+			SSAVar userVar = userResult.getSVar();
+			if (userVar == null || userVar.getUseList().isEmpty()) {
+				return user;
+			}
+			if (nextHopIsSynthetic(userVar)) {
+				// SYNTHETIC consumers are control-flow merges JADX doesn't render — stop at the last
+				// instruction that produces visible code.
+				return current;
+			}
+			current = user;
+			var = userVar;
 		}
 		return current;
 	}
 
-	/**
-	 * Returns the single use of {@code ctorVar} that is not {@code ctor} itself, or null if
-	 * there are zero or more than one such uses.
-	 */
-	private static InsnNode singlePostCtorUser(SSAVar ctorVar, InsnNode ctor) {
-		List<RegisterArg> uses = ctorVar.getUseList();
+	/** Returns the parent insn of a single user of {@code var}, or null if there isn't exactly one. */
+	private static InsnNode soleUserOf(SSAVar var) {
+		List<RegisterArg> uses = var.getUseList();
+		if (uses.size() != 1) {
+			return null;
+		}
+		return uses.get(0).getParentInsn();
+	}
+
+	/** True iff {@code userVar} has exactly one consumer and that consumer is flagged SYNTHETIC. */
+	private static boolean nextHopIsSynthetic(SSAVar userVar) {
+		if (userVar.getUseList().size() != 1) {
+			return false;
+		}
+		InsnNode sole = userVar.getUseList().get(0).getParentInsn();
+		return sole != null && sole.contains(AFlag.SYNTHETIC);
+	}
+
+	/** Returns the single post-ctor user of a constructor's receiver, or {@code useInsn} unchanged. */
+	private static InsnNode pivotPastConstructor(InsnNode useInsn) {
+		if (!(useInsn instanceof InvokeNode) || !((InvokeNode) useInsn).getCallMth().isConstructor()) {
+			return useInsn;
+		}
+		InsnArg arg0 = useInsn.getArg(0);
+		if (!(arg0 instanceof RegisterArg) || ((RegisterArg) arg0).getSVar() == null) {
+			return useInsn;
+		}
+		SSAVar recvVar = ((RegisterArg) arg0).getSVar();
 		InsnNode found = null;
-		for (RegisterArg use : uses) {
+		for (RegisterArg use : recvVar.getUseList()) {
 			InsnNode parent = use.getParentInsn();
-			if (parent != null && parent != ctor) {
-				if (found != null) {
-					return null;
-				}
-				found = parent;
+			if (parent == null || parent == useInsn) {
+				continue;
 			}
+			if (found != null) {
+				return useInsn; // multiple post-ctor uses → don't pivot
+			}
+			found = parent;
 		}
-		return found;
+		return found != null ? found : useInsn;
 	}
 
-	/** Returns the FilledNewArrayNode that directly uses the result of {@code csn}, or null. */
+	private static SSAVar ssaVarOf(InsnNode insn) {
+		RegisterArg r = insn.getResult();
+		return r != null ? r.getSVar() : null;
+	}
+
 	private static FilledNewArrayNode findFilledNewArrayParent(ConstStringNode csn) {
-		RegisterArg result = csn.getResult();
-		if (result == null) {
+		SSAVar v = ssaVarOf(csn);
+		if (v == null) {
 			return null;
 		}
-		SSAVar ssaVar = result.getSVar();
-		if (ssaVar == null) {
-			return null;
-		}
-		for (RegisterArg use : ssaVar.getUseList()) {
-			InsnNode parent = use.getParentInsn();
-			if (parent instanceof FilledNewArrayNode) {
-				return (FilledNewArrayNode) parent;
-			}
-		}
-		return null;
+		return v.getUseList().stream()
+				.map(RegisterArg::getParentInsn)
+				.filter(FilledNewArrayNode.class::isInstance)
+				.map(FilledNewArrayNode.class::cast)
+				.findFirst().orElse(null);
 	}
 
-	/** Returns the index of the arg in {@code insn} whose SSAVar matches {@code ssaVar}, or -1. */
 	private static int argIndexOf(InsnNode insn, SSAVar ssaVar) {
 		for (int i = 0; i < insn.getArgsCount(); i++) {
 			InsnArg arg = insn.getArg(i);
@@ -289,56 +281,66 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 		return -1;
 	}
 
-	private static String buildChainComment(List<B64Result> results) {
-		StringBuilder sb = new StringBuilder();
-		for (int i = 0; i < results.size(); i++) {
-			sb.append('\n');
-			sb.append(results.get(i).indexedCommentText(i));
+	/** True if any use of {@code csn}'s result feeds a Base64.decode-like call as a direct arg. */
+	private static boolean isUsedAsBase64DecodeArg(ConstStringNode csn) {
+		SSAVar v = ssaVarOf(csn);
+		if (v == null) {
+			return false;
 		}
-		return sb.toString();
+		return v.getUseList().stream().anyMatch(use -> isBase64DecodeCall(use.getParentInsn()));
 	}
 
-	private static String buildArrayComment(TreeMap<Integer, B64Result> decodings) {
-		return B64Result.buildIndexedComment(decodings);
+	private static boolean isBase64DecodeCall(InsnNode insn) {
+		if (!(insn instanceof InvokeNode)) {
+			return false;
+		}
+		MethodInfo mth = ((InvokeNode) insn).getCallMth();
+		return mth.getDeclClass().getFullName().toLowerCase(Locale.ROOT).contains("base64")
+				&& mth.getName().toLowerCase(Locale.ROOT).contains("decode");
+	}
+
+	private static Set<String> collectConstantValueFieldStrings(ClassNode cls) {
+		Set<String> result = new HashSet<>();
+		for (FieldNode field : cls.getFields()) {
+			EncodedValue cv = field.get(JadxAttrType.CONSTANT_VALUE);
+			if (cv == null || cv.getType() != EncodedType.ENCODED_STRING) {
+				continue;
+			}
+			Object val = cv.getValue();
+			if (val instanceof String) {
+				result.add((String) val);
+			}
+		}
+		return result.isEmpty() ? Collections.emptySet() : result;
 	}
 
 	/**
-	 * Returns true if any use of {@code csn}'s result register is a direct argument
-	 * to a Base64.decode-like method call.
+	 * Collects per-index Base64 candidates for a single string-array literal and tracks whether at
+	 * least one element passed full heuristic detection (the "anchor"). An array gets a comment only
+	 * when at least one element clearly looks like intentional Base64; once that bar is met, every
+	 * sibling element that merely decodes to valid UTF-8 is also included with its index.
 	 */
-	private static boolean isUsedAsBase64DecodeArg(ConstStringNode csn) {
-		RegisterArg result = csn.getResult();
-		if (result == null) {
-			return false;
-		}
-		SSAVar ssaVar = result.getSVar();
-		if (ssaVar == null) {
-			return false;
-		}
-		for (RegisterArg use : ssaVar.getUseList()) {
-			InsnNode parent = use.getParentInsn();
-			if (B64FieldInitPass.isBase64DecodeCall(parent)) {
-				return true;
-			}
-		}
-		return false;
-	}
+	private static final class ArrayCandidateCollector {
+		private final TreeMap<Integer, B64Result> candidates = new TreeMap<>();
+		private boolean hasAnchor;
 
-	/** Collects literal string values of all CONSTANT_VALUE fields in the class. */
-	private static Set<String> collectConstantValueFieldStrings(ClassNode cls) {
-		Set<String> result = null;
-		for (FieldNode field : cls.getFields()) {
-			EncodedValue constVal = field.get(JadxAttrType.CONSTANT_VALUE);
-			if (constVal != null && constVal.getType() == EncodedType.ENCODED_STRING) {
-				Object val = constVal.getValue();
-				if (val instanceof String) {
-					if (result == null) {
-						result = new HashSet<>();
-					}
-					result.add((String) val);
-				}
+		void add(int index, B64Result anchor, B64Result fallback) {
+			B64Result chosen = anchor != null ? anchor : fallback;
+			if (chosen == null) {
+				return;
+			}
+			candidates.put(index, chosen);
+			if (anchor != null) {
+				hasAnchor = true;
 			}
 		}
-		return result != null ? result : Collections.emptySet();
+
+		boolean hasAnchor() {
+			return hasAnchor;
+		}
+
+		String buildComment() {
+			return B64Result.buildIndexedComment(candidates);
+		}
 	}
 }

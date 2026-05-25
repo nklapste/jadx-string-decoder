@@ -1,6 +1,7 @@
 package jadx.plugins.stringdecoder;
 
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 final class B64Result {
 	private final String decoded;
@@ -15,23 +16,24 @@ final class B64Result {
 		return decoded;
 	}
 
-	/** Returns e.g. "b64: hello", "b64(url): hello", "b64(mime): hello" */
+	/** "b64: hello" or "b64(url): hello" */
 	String commentText() {
-		return tag.isEmpty() ? "b64: " + decoded : "b64(" + tag + "): " + decoded;
+		return prefix() + ": " + decoded;
 	}
 
-	/** Returns e.g. "b64[0]: hello", "b64(url)[0]: hello" */
+	/** "b64[0]: hello" or "b64(url)[0]: hello" */
 	String indexedCommentText(int index) {
-		return tag.isEmpty() ? "b64[" + index + "]: " + decoded : "b64(" + tag + ")[" + index + "]: " + decoded;
+		return prefix() + "[" + index + "]: " + decoded;
 	}
 
-	/** Builds a multi-line indexed comment from a sorted map of array-index → B64Result. */
+	private String prefix() {
+		return tag.isEmpty() ? "b64" : "b64(" + tag + ")";
+	}
+
+	/** Multi-line indexed comment from a sorted map of array-index → result. */
 	static String buildIndexedComment(TreeMap<Integer, B64Result> entries) {
-		StringBuilder sb = new StringBuilder();
-		for (java.util.Map.Entry<Integer, B64Result> e : entries.entrySet()) {
-			sb.append('\n');
-			sb.append(e.getValue().indexedCommentText(e.getKey()));
-		}
-		return sb.toString();
+		return entries.entrySet().stream()
+				.map(e -> "\n" + e.getValue().indexedCommentText(e.getKey()))
+				.collect(Collectors.joining());
 	}
 }
