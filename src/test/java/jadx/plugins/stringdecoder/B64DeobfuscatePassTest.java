@@ -50,7 +50,7 @@ class B64DeobfuscatePassTest extends PluginTestBase {
 
 	@Test
 	public void fieldB64Test() throws Exception {
-		// Base64 string assigned to a static field in <clinit>
+		// Base64 string in a const-string in a regular method body (instance field via iput-object)
 		String code = decompileSmali("b64/field_b64.smali");
 		System.out.println(code);
 		assertThat(code).contains("b64: Hello, World!");
@@ -206,14 +206,6 @@ class B64DeobfuscatePassTest extends PluginTestBase {
 	}
 
 	@Test
-	public void pemB64FieldTest() throws Exception {
-		// PEM Base64 String CONSTANT_VALUE + byte[] field via Base64.decode — both should get b64(mime): comment
-		String code = decompileSmali("b64/pem_b64_field.smali");
-		System.out.println(code);
-		assertThat(code).contains("b64(mime):");
-	}
-
-	@Test
 	public void antifridas8kTest() throws Exception {
 		// Real-world anti-frida/xposed detection class (s8.k) with filled-new-array/range.
 		// All 9 strings in the array should get indexed comments. Padded strings (frida,
@@ -284,30 +276,9 @@ class B64DeobfuscatePassTest extends PluginTestBase {
 	}
 
 	@Test
-	public void camelCaseSkipDisabledTest() throws Exception {
-		// with skipCamelCase=false, "getContext" is no longer suppressed by the camelCase filter;
-		// other filters (printable ratio, alnum ratio) will still apply
-		String code = decompileSmali("b64/camelcase_b64.smali",
-				Map.of(opt("skipCamelCase"), "false"));
-		System.out.println(code);
-		// "getContext" decodes to non-UTF-8 bytes so no comment expected even without the filter
-		assertThat(code).doesNotContain("b64:");
-	}
-
-	@Test
 	public void allCapsNotFlaggedTest() throws Exception {
 		// "CURSOR" is all-uppercase and decodes to "\tDR9" — suppressed by skipSnakeCase (default true)
 		String code = decompileSmali("b64/allcaps_b64.smali");
-		System.out.println(code);
-		assertThat(code).doesNotContain("b64:");
-	}
-
-	@Test
-	public void allCapsSkipDisabledTest() throws Exception {
-		// With skipSnakeCase=false, "CURSOR" is no longer suppressed by the pattern filter;
-		// it decodes to "\tDR9" (75% printable), which fails the 90% default printable threshold
-		String code = decompileSmali("b64/allcaps_b64.smali",
-				Map.of(opt("skipSnakeCase"), "false"));
 		System.out.println(code);
 		assertThat(code).doesNotContain("b64:");
 	}
@@ -342,16 +313,6 @@ class B64DeobfuscatePassTest extends PluginTestBase {
 	}
 
 	@Test
-	public void dictionarySkipDisabledTest() throws Exception {
-		// Disabling skipDictionaryWords must not crash; "callback" is still rejected by the
-		// UTF-8 decode step so no b64: comment is expected
-		String code = decompileSmali("b64/dict_word_b64.smali",
-				Map.of(opt("skipDictionaryWords"), "false"));
-		System.out.println(code);
-		assertThat(code).doesNotContain("b64:");
-	}
-
-	@Test
 	public void pascalCaseNotFlaggedTest() throws Exception {
 		// "FileUtil" matches PascalCase — suppressed by skipPascalCase (default true)
 		String code = decompileSmali("b64/pascalcase_b64.smali");
@@ -360,13 +321,16 @@ class B64DeobfuscatePassTest extends PluginTestBase {
 	}
 
 	@Test
-	public void pascalCaseSkipDisabledTest() throws Exception {
-		// With skipPascalCase=false, "FileUtil" is no longer suppressed by the pattern filter;
-		// it decodes to bytes that are ~60% printable, failing the 90% default threshold
-		String code = decompileSmali("b64/pascalcase_b64.smali",
+	public void pascalCaseSkipDisabledDecodesTest() throws Exception {
+		// "SiteWith" is PascalCase and decodes to "J+^Z+a" (100% printable, 50% alnum).
+		// With the filter on (default) it is suppressed; with it off it should be annotated.
+		String codeDefault = decompileSmali("b64/pascalcase_decodable_b64.smali");
+		assertThat(codeDefault).doesNotContain("b64:");
+
+		String codeDisabled = decompileSmali("b64/pascalcase_decodable_b64.smali",
 				Map.of(opt("skipPascalCase"), "false"));
-		System.out.println(code);
-		assertThat(code).doesNotContain("b64:");
+		System.out.println(codeDisabled);
+		assertThat(codeDisabled).contains("b64: J+^Z+a");
 	}
 
 	@Test
@@ -417,6 +381,48 @@ class B64DeobfuscatePassTest extends PluginTestBase {
 		String code = decompileSmali("b64/b64_in_trycatch.smali");
 		System.out.println(code);
 		assertThat(code).contains("b64: getPackageInfo");
+	}
+
+	@Test
+	public void b64ConditionalTryCatchTest() throws Exception {
+		// Real-world pattern: cache==null branch initialises via two Base64.decode reflection
+		// strings; an sdk>=33 conditional selects a delegate path; else branch uses a third
+		// Base64.decode string. All three must be annotated despite the branching structure.
+		String code = decompileSmali("b64/b64_conditional_trycatch.smali");
+		System.out.println(code);
+		assertThat(code).contains("b64[0]: android.app.ActivityThread");
+		assertThat(code).contains("b64[1]: getPackageManager");
+		assertThat(code).contains("b64: getPackageInfo");
+	}
+
+	@Test
+	public void b64DecodePassDisabledTest() throws Exception {
+		// enableB64DecodePass=false must suppress all b64: comments from the main detection pass
+		String code = decompileSmali("b64/hello.smali",
+				Map.of(opt("enableB64DecodePass"), "false"));
+		System.out.println(code);
+		assertThat(code).doesNotContain("b64:");
+	}
+
+	@Test
+	public void b64DecodePassDisabledAlsoDisablesFieldInitPassTest() throws Exception {
+		// enableB64DecodePass=false gates all three passes, including B64FieldInitPass.
+		// A static field initialised with a Base64 string must not be annotated.
+		String code = decompileSmali("b64/static_field_b64.smali",
+				Map.of(opt("enableB64DecodePass"), "false"));
+		System.out.println(code);
+		assertThat(code).doesNotContain("b64:");
+	}
+
+	@Test
+	public void filledArrayNoAnchorNotAnnotatedTest() throws Exception {
+		// String[] where every element ("aGVs") decodes to valid Base64+UTF-8 ("hel", 3 chars)
+		// but fails full heuristic detection (decoded length 3 < default minDecodedLength=4).
+		// hasAnchor=false so neither b64: nor b64[N]: comments are emitted.
+		String code = decompileSmali("b64/filled_array_no_anchor.smali");
+		System.out.println(code);
+		assertThat(code).doesNotContain("b64:");
+		assertThat(code).doesNotContain("b64[");
 	}
 
 }

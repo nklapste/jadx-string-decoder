@@ -36,18 +36,12 @@ class ByteArrayStringPassTest extends PluginTestBase {
 	}
 
 	@Test
-	public void byteArrayB64AlphabetTest() throws Exception {
-		// byte[] alphabet field — standard Base64 (+/)
+	public void b64AlphabetByteAndIntArrayTest() throws Exception {
+		// Same class has a byte[] standard alphabet (+/) and an int[] URL-safe alphabet (-_).
+		// Verifies both array element types are annotated correctly.
 		String code = decompileSmali("bytes/b64_alphabet_byte_array.smali");
 		System.out.println(code);
 		assertThat(code).contains("bytes: \"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/\"");
-	}
-
-	@Test
-	public void intArrayB64AlphabetTest() throws Exception {
-		// int[] alphabet field — URL-safe Base64 (-_); verifies int[] is treated identically to byte[]
-		String code = decompileSmali("bytes/b64_alphabet_byte_array.smali");
-		System.out.println(code);
 		assertThat(code).contains("bytes: \"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_\"");
 	}
 
@@ -68,6 +62,76 @@ class ByteArrayStringPassTest extends PluginTestBase {
 				Map.of(opt("enableByteArrayStringPass"), "false"));
 		System.out.println(code);
 		assertThat(code).doesNotContain("bytes:");
+	}
+
+	@Test
+	public void intArraySentinelRejectedTest() throws Exception {
+		// int[] containing -1 — the sentinel value used in Base64 decode tables for invalid chars.
+		// The entire array must be rejected when any element is outside [0, 255].
+		String code = decompileSmali("bytes/int_array_sentinel.smali");
+		System.out.println(code);
+		assertThat(code).doesNotContain("bytes:");
+	}
+
+	@Test
+	public void nonPrintableByteArrayNotAnnotatedTest() throws Exception {
+		// byte[] of ASCII control characters (0x01–0x08): valid UTF-8 but 0% printable.
+		// ByteArrayStringPass must not annotate arrays below the default 20% printable threshold.
+		String code = decompileSmali("bytes/non_printable_bytes.smali");
+		System.out.println(code);
+		assertThat(code).doesNotContain("bytes:");
+	}
+
+	@Test
+	public void byteArrayMinPrintablePercentOptionTest() throws Exception {
+		// "café" stored as int[] bytes {99,97,102,195,169} decodes to "café".
+		// Three of four Unicode chars are ASCII-printable → 75% printable ratio.
+		// Default threshold (20%) passes it; raising to 80% must suppress it.
+		String codeDefault = decompileSmali("bytes/int_array_utf8.smali");
+		assertThat(codeDefault).contains("bytes: \"café\"");
+
+		String codeHighThreshold = decompileSmali("bytes/int_array_utf8.smali",
+				Map.of(opt("byteArrayMinPrintablePercent"), "80"));
+		System.out.println(codeHighThreshold);
+		assertThat(codeHighThreshold).doesNotContain("bytes:");
+	}
+
+	@Test
+	public void invalidUtf8IntArrayNotAnnotatedTest() throws Exception {
+		// int[] {72, 128, 111}: values all in [0,255] so extractByteLiterals accepts them,
+		// but byte 0x80 (128) is a lone UTF-8 continuation byte — decodeUtf8OrNull returns null.
+		// ByteArrayStringPass must not annotate this array.
+		String code = decompileSmali("bytes/invalid_utf8_int_array.smali");
+		System.out.println(code);
+		assertThat(code).doesNotContain("bytes:");
+	}
+
+	@Test
+	public void byteArrayMaxCommentLengthTruncationTest() throws Exception {
+		// 120-byte array of ASCII 'A' chars — default maxCommentLength=100 truncates the bytes: comment
+		String codeDefault = decompileSmali("bytes/long_byte_array.smali");
+		System.out.println(codeDefault);
+		assertThat(codeDefault).contains("bytes: \"" + "A".repeat(100) + "...");
+		assertThat(codeDefault).doesNotContain("A".repeat(101));
+
+		// maxCommentLength=10 truncates to 10 chars + "..."
+		String codeTruncated = decompileSmali("bytes/long_byte_array.smali",
+				Map.of(opt("maxCommentLength"), "10"));
+		assertThat(codeTruncated).contains("bytes: \"" + "A".repeat(10) + "...");
+		assertThat(codeTruncated).doesNotContain("A".repeat(11));
+	}
+
+	@Test
+	public void byteArrayMinDecodedLengthTest() throws Exception {
+		// byte[] "Hi" (2 chars, 100% printable) — below the default minDecodedLength=4.
+		// Default settings must suppress it; lowering minDecodedLength to 2 must annotate it.
+		String codeDefault = decompileSmali("bytes/short_byte_array.smali");
+		assertThat(codeDefault).doesNotContain("bytes:");
+
+		String codeLowThreshold = decompileSmali("bytes/short_byte_array.smali",
+				Map.of(opt("minDecodedLength"), "2"));
+		System.out.println(codeLowThreshold);
+		assertThat(codeLowThreshold).contains("bytes: \"Hi\"");
 	}
 
 }
