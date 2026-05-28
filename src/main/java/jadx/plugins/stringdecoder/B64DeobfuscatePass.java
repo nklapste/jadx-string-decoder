@@ -12,9 +12,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import jadx.api.data.CommentStyle;
-import jadx.api.plugins.input.data.annotations.EncodedType;
-import jadx.api.plugins.input.data.annotations.EncodedValue;
-import jadx.api.plugins.input.data.attributes.JadxAttrType;
 import jadx.api.plugins.pass.JadxPassInfo;
 import jadx.api.plugins.pass.impl.OrderedJadxPassInfo;
 import jadx.api.plugins.pass.types.JadxDecompilePass;
@@ -291,13 +288,9 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 	private static Set<String> collectConstantValueFieldStrings(ClassNode cls) {
 		Set<String> result = new HashSet<>();
 		for (FieldNode field : cls.getFields()) {
-			EncodedValue cv = field.get(JadxAttrType.CONSTANT_VALUE);
-			if (cv == null || cv.getType() != EncodedType.ENCODED_STRING) {
-				continue;
-			}
-			Object val = cv.getValue();
-			if (val instanceof String) {
-				result.add((String) val);
+			String val = FieldConstants.readStringValue(field);
+			if (val != null) {
+				result.add(val);
 			}
 		}
 		return result.isEmpty() ? Collections.emptySet() : result;

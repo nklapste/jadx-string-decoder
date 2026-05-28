@@ -2,9 +2,6 @@ package jadx.plugins.stringdecoder;
 
 import java.util.TreeMap;
 
-import jadx.api.plugins.input.data.annotations.EncodedType;
-import jadx.api.plugins.input.data.annotations.EncodedValue;
-import jadx.api.plugins.input.data.attributes.JadxAttrType;
 import jadx.api.plugins.pass.JadxPassInfo;
 import jadx.api.plugins.pass.impl.OrderedJadxPassInfo;
 import jadx.api.plugins.pass.types.JadxDecompilePass;
@@ -65,7 +62,7 @@ public class B64FieldInitPass implements JadxDecompilePass {
 			return;
 		}
 		// static final field with literal value encoded in the class file (no <clinit>).
-		String constStr = readConstantStringValue(field);
+		String constStr = FieldConstants.readStringValue(field);
 		if (constStr != null) {
 			annotateField(field, constStr, false);
 		}
@@ -125,7 +122,7 @@ public class B64FieldInitPass implements JadxDecompilePass {
 		}
 		if (argInsn != null && argInsn.getType() == InsnType.SGET) {
 			FieldNode refField = resolveFieldFromSget(contextField, (IndexInsnNode) argInsn);
-			return refField != null ? readConstantStringValue(refField) : null;
+			return refField != null ? FieldConstants.readStringValue(refField) : null;
 		}
 		return null;
 	}
@@ -171,7 +168,7 @@ public class B64FieldInitPass implements JadxDecompilePass {
 		if (refField == null) {
 			return false;
 		}
-		String str = readConstantStringValue(refField);
+		String str = FieldConstants.readStringValue(refField);
 		if (str == null || !annotateField(consumingField, str, isBase64Call)) {
 			return false;
 		}
@@ -188,15 +185,6 @@ public class B64FieldInitPass implements JadxDecompilePass {
 		FieldInfo refFieldInfo = (FieldInfo) sgetInsn.getIndex();
 		ClassNode declCls = contextField.root().resolveClass(refFieldInfo.getDeclClass());
 		return declCls != null ? declCls.searchField(refFieldInfo) : null;
-	}
-
-	private static String readConstantStringValue(FieldNode field) {
-		EncodedValue cv = field.get(JadxAttrType.CONSTANT_VALUE);
-		if (cv == null || cv.getType() != EncodedType.ENCODED_STRING) {
-			return null;
-		}
-		Object val = cv.getValue();
-		return val instanceof String ? (String) val : null;
 	}
 
 	private static InsnNode resolveArgInsn(InsnArg arg) {
