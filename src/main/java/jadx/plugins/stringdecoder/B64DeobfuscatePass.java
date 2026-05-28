@@ -5,7 +5,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -22,7 +21,6 @@ import jadx.api.plugins.pass.types.JadxDecompilePass;
 import jadx.core.codegen.utils.CodeComment;
 import jadx.core.dex.attributes.AFlag;
 import jadx.core.dex.attributes.AType;
-import jadx.core.dex.info.MethodInfo;
 import jadx.core.dex.instructions.ConstStringNode;
 import jadx.core.dex.instructions.FilledNewArrayNode;
 import jadx.core.dex.instructions.InvokeNode;
@@ -287,16 +285,7 @@ public class B64DeobfuscatePass implements JadxDecompilePass {
 		if (v == null) {
 			return false;
 		}
-		return v.getUseList().stream().anyMatch(use -> isBase64DecodeCall(use.getParentInsn()));
-	}
-
-	private static boolean isBase64DecodeCall(InsnNode insn) {
-		if (!(insn instanceof InvokeNode)) {
-			return false;
-		}
-		MethodInfo mth = ((InvokeNode) insn).getCallMth();
-		return mth.getDeclClass().getFullName().toLowerCase(Locale.ROOT).contains("base64")
-				&& mth.getName().toLowerCase(Locale.ROOT).contains("decode");
+		return v.getUseList().stream().anyMatch(use -> B64DecodeCalls.isDecodeCall(use.getParentInsn()));
 	}
 
 	private static Set<String> collectConstantValueFieldStrings(ClassNode cls) {

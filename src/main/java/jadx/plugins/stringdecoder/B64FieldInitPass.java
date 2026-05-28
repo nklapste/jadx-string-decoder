@@ -1,6 +1,5 @@
 package jadx.plugins.stringdecoder;
 
-import java.util.Locale;
 import java.util.TreeMap;
 
 import jadx.api.plugins.input.data.annotations.EncodedType;
@@ -12,12 +11,10 @@ import jadx.api.plugins.pass.types.JadxDecompilePass;
 import jadx.core.dex.attributes.AType;
 import jadx.core.dex.attributes.FieldInitInsnAttr;
 import jadx.core.dex.info.FieldInfo;
-import jadx.core.dex.info.MethodInfo;
 import jadx.core.dex.instructions.ConstStringNode;
 import jadx.core.dex.instructions.FilledNewArrayNode;
 import jadx.core.dex.instructions.IndexInsnNode;
 import jadx.core.dex.instructions.InsnType;
-import jadx.core.dex.instructions.InvokeNode;
 import jadx.core.dex.instructions.args.InsnArg;
 import jadx.core.dex.instructions.args.InsnWrapArg;
 import jadx.core.dex.instructions.args.RegisterArg;
@@ -142,7 +139,7 @@ public class B64FieldInitPass implements JadxDecompilePass {
 		if (insn == null || depth > MAX_ARG_TREE_DEPTH) {
 			return false;
 		}
-		boolean isBase64Call = isBase64DecodeCall(insn);
+		boolean isBase64Call = B64DecodeCalls.isDecodeCall(insn);
 		for (int i = 0; i < insn.getArgsCount(); i++) {
 			InsnNode argInsn = resolveArgInsn(insn.getArg(i));
 			if (argInsn == null) {
@@ -224,14 +221,5 @@ public class B64FieldInitPass implements JadxDecompilePass {
 		}
 		field.addCodeComment(result.commentText());
 		return true;
-	}
-
-	private static boolean isBase64DecodeCall(InsnNode insn) {
-		if (!(insn instanceof InvokeNode)) {
-			return false;
-		}
-		MethodInfo mth = ((InvokeNode) insn).getCallMth();
-		return mth.getDeclClass().getFullName().toLowerCase(Locale.ROOT).contains("base64")
-				&& mth.getName().toLowerCase(Locale.ROOT).contains("decode");
 	}
 }
