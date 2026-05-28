@@ -53,21 +53,29 @@ Looks for `byte[]` and `int[]` fields initialised with a `FilledNewArrayNode` of
 
 ### Detection logic (`B64Detector`)
 
-`B64Detector.detect(String, B64DeobfuscateOptions)` applies a pipeline of filters (all thresholds configurable via options):
+`B64Detector.detect(String, B64DeobfuscateOptions)` runs an ordered pipeline (all thresholds configurable via options). The pre-decode filters live in the `INPUT_FILTERS` array and short-circuit on the first rejection:
 
 1. Blocklist check (`B64FalsePositives`) — known false positives (e.g. Android class names) rejected first
-2. Minimum encoded length (`minInputLength`, default 8)
-3. Require valid Base64 length (`requireValidLength`, default false) — total length must be divisible by 4
-4. Skip camelCase identifiers (`skipCamelCase`, default true) — rejects strings matching `^[a-z]+([A-Z][a-z]+)+$` under 40 chars
-5. Charset validation — must match standard or URL-safe Base64 alphabet
-6. Attempt decode with `Base64.getDecoder()`, then `Base64.getUrlDecoder()`; MIME decoder used if string contains `\n`/`\r`
-7. Strict UTF-8 decode (`CodingErrorAction.REPORT`)
-8. Minimum printable-ASCII ratio (`minPrintablePercent`, default 90%)
-9. Minimum alphanumeric ratio (`minAlphanumericPercent`, default 35%)
-10. Minimum decoded length (`minDecodedLength`, default 0 = disabled)
-11. Truncation (`maxCommentLength`, default 100; 0 = unlimited)
+2. Valid Base64 length (`requireValidLength`, default true) — length *excluding* `\n`/`\r` must be divisible by 4 (line breaks are stripped via `significantLength` so PEM/MIME-wrapped strings aren't rejected for their wrapping)
+3. Identifier-shape skips, only applied to strings under 40 chars:
+   - `skipCamelCase` (default true) — `^[a-z]+([A-Z][a-z]+)+$`
+   - `skipPascalCase` (default true) — `^[A-Z][a-z]+([A-Z][a-z0-9]+)+$`
+   - `skipSnakeCase` (default true) — all-caps (`FOO_BAR`) or all-lower (`foo_bar`)
+   - `skipDictionaryWords` (default true) — every camelCase/underscore segment is a known word (`B64DictionaryFilter` / `words.txt`)
+4. Charset validation — must match the standard or URL-safe Base64 alphabet (`\n`/`\r` permitted)
 
-`B64Detector.decodeForced(String, int)` skips steps 1–9 and uses `CodingErrorAction.REPLACE` instead of `REPORT`. Used when the string is an explicit arg to a `Base64.decode` call.
+Then decode and apply post-decode heuristics:
+
+5. Decode with `Base64.getDecoder()`, then `Base64.getUrlDecoder()`; the MIME decoder is also tried when the string contains `\n`/`\r`
+6. Strict UTF-8 decode (`CodingErrorAction.REPORT`)
+7. Minimum printable-ASCII ratio (`minPrintablePercent`, default 90%)
+8. Minimum alphanumeric ratio (`minAlphanumericPercent`, default 35%)
+9. Minimum decoded length (`minDecodedLength`, default 4; 0 = disabled)
+10. Truncation (`maxCommentLength`, default 100; 0 = unlimited)
+
+Two helpers bypass parts of the pipeline:
+- `B64Detector.decodeForced(String, int)` — skips all charset and heuristic filters and uses `CodingErrorAction.REPLACE` instead of `REPORT`. Used when the string is an explicit arg to a `Base64.decode`-like call (recognised by `B64DecodeCalls.isDecodeCall`).
+- `B64Detector.decodeIfValid(String, int)` — applies only the charset check + strict UTF-8 decode, no heuristic filters. Used for sibling array elements once one element in the array has passed full detection (the "anchor").
 
 ### False-positive prevention
 
