@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -227,6 +228,28 @@ class B64DetectorTest {
 		B64Result r = B64Detector.detect("aGVsbG8", options("requireValidLength", "false"));
 		assertThat(r).isNotNull();
 		assertThat(r.getDecoded()).isEqualTo("hello");
+	}
+
+	@Test
+	public void detectLineWrappedMimeB64NotDivisibleByFourTest() {
+		// One \n makes the raw length 21 (21 % 4 == 1), which the old length filter rejected outright.
+		// significantLength() ignores the line break, so the 20 real Base64 chars (20 % 4 == 0) now
+		// pass the default requireValidLength=true filter and decode via the MIME variant.
+		B64Result r = B64Detector.detect("SGVsbG8s\nIFdvcmxkIQ==", defaultOptions());
+		assertThat(r).isNotNull();
+		assertThat(r.commentText()).isEqualTo("b64(mime): Hello, World!");
+	}
+
+	@Test
+	public void detectSpaceDelimitedMimeB64CurrentlyFailsTest() throws CharacterCodingException {
+		// A space-delimited blob is genuinely valid MIME Base64 — the MIME decoder skips the space:
+		String spaceDelimited = "SGVsbG8s IFdvcmxkIQ==";
+		byte[] bytes = Base64.getMimeDecoder().decode(spaceDelimited);
+		assertThat(B64Detector.decodeUtf8(bytes, CodingErrorAction.REPORT)).isEqualTo("Hello, World!");
+		// ...but B64Detector rejects it: the charset patterns permit only \n/\r as whitespace, not spaces.
+		// Known limitation; flip this to a successful-decode assertion if full-MIME whitespace tolerance
+		// is ever added (see significantLength()).
+		assertThat(B64Detector.detect(spaceDelimited, defaultOptions())).isNull();
 	}
 
 	@Test

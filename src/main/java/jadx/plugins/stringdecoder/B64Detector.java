@@ -22,6 +22,8 @@ public final class B64Detector {
 	// Allow embedded \n/\r (PEM/MIME line-wrapped Base64); = padding and trailing newline are optional.
 	private static final Pattern BASE64_STANDARD = Pattern.compile("^[A-Za-z0-9+/\\n\\r]*=*[\\n\\r]*$");
 	private static final Pattern BASE64_URL_SAFE = Pattern.compile("^[A-Za-z0-9_\\-\\n\\r]*=*[\\n\\r]*$");
+	// Line-break chars permitted as PEM/MIME wrapping above; stripped before the length-quantum check.
+	private static final Pattern LINE_BREAKS = Pattern.compile("[\\n\\r]");
 	// Identifier shapes — only checked below IDENTIFIER_FILTER_MAX_LEN.
 	private static final Pattern CAMEL_CASE = Pattern.compile("^[a-z]+([A-Z][a-z]+)+$");
 	private static final Pattern PASCAL_CASE = Pattern.compile("^[A-Z][a-z]+([A-Z][a-z0-9]+)+$");
@@ -57,7 +59,7 @@ public final class B64Detector {
 	 */
 	private static final InputFilter[] INPUT_FILTERS = {
 			(s, o) -> B64FalsePositives.contains(s),
-			(s, o) -> o.isRequireValidLength() && s.length() % 4 != 0,
+			(s, o) -> o.isRequireValidLength() && significantLength(s) % 4 != 0,
 			(s, o) -> isLikelyIdentifier(s, o),
 			(s, o) -> !hasValidBase64Charset(s)
 	};
@@ -114,6 +116,18 @@ public final class B64Detector {
 
 	private static boolean hasValidBase64Charset(String str) {
 		return BASE64_STANDARD.matcher(str).matches() || BASE64_URL_SAFE.matcher(str).matches();
+	}
+
+	/**
+	 * Length excluding {@code \n}/{@code \r} — line wraps don't count toward the 4-char Base64
+	 * quantum, so {@code requireValidLength} must ignore them or it rejects line-wrapped strings.
+	 *
+	 * <p>TODO: full MIME also skips spaces/tabs; supporting it means stripping all {@code \s} here
+	 * and relaxing {@link #hasValidBase64Charset}. Only worth it with a solid false-positive
+	 * defense, else prose like {@code "Java Code"} decodes.
+	 */
+	private static int significantLength(String str) {
+		return LINE_BREAKS.matcher(str).replaceAll("").length();
 	}
 
 	private static Variant[] variantsFor(String str) {
